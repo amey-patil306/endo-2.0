@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { format, isAfter, startOfDay } from 'date-fns';
+import { format, isAfter, startOfDay, isSameMonth } from 'date-fns';
 import SymptomModal from './SymptomModal';
 import { SymptomEntry, UserProgress } from '../types';
 import { getSymptomEntry, saveSymptomEntry, updateUserProgress, subscribeToSymptomEntries, getAllSymptomEntries } from '../lib/database';
@@ -21,17 +21,24 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
   const [events, setEvents] = useState<any[]>([]);
   const [currentMonthEntries, setCurrentMonthEntries] = useState<SymptomEntry[]>([]);
 
-  // Get current month key
-  const getCurrentMonthKey = (): string => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // Get current month and year
+  const getCurrentMonth = (): Date => {
+    return new Date();
   };
 
-  // Check if date belongs to current month
+  // Check if date is in current month
   const isCurrentMonth = (dateString: string): boolean => {
     const date = new Date(dateString);
-    const dateMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    return dateMonthKey === getCurrentMonthKey();
+    const currentMonth = getCurrentMonth();
+    return isSameMonth(date, currentMonth);
+  };
+
+  // Check if date is today or in the past (but not future)
+  const isValidTrackingDate = (dateString: string): boolean => {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+    return date <= today;
   };
 
   useEffect(() => {
@@ -91,18 +98,15 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
 
   const handleDateClick = async (info: any) => {
     const clickedDate = info.dateStr;
-    const today = startOfDay(new Date());
-    const selectedDay = startOfDay(new Date(clickedDate));
-
     console.log(`📅 Date clicked: ${clickedDate}`);
 
-    // Prevent future dates
-    if (isAfter(selectedDay, today)) {
+    // Check if date is valid for tracking
+    if (!isValidTrackingDate(clickedDate)) {
       toast.error('Cannot log symptoms for future dates');
       return;
     }
 
-    // Only allow current month dates
+    // Only allow current month dates for new entries
     if (!isCurrentMonth(clickedDate)) {
       toast.error('Can only log symptoms for the current month');
       return;
@@ -176,9 +180,8 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
     setExistingEntry(null);
   };
 
-  const currentMonth = getCurrentMonthKey();
-  const [year, month] = currentMonth.split('-');
-  const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('en-US', { 
+  const currentMonth = getCurrentMonth();
+  const monthName = currentMonth.toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: 'long' 
   });
@@ -187,7 +190,7 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
     <div className="space-y-4">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          <strong>Monthly Tracking - {monthName}:</strong> Click on any date in the current month to log your daily symptoms. 
+          <strong>Monthly Tracking - {monthName}:</strong> Click on any date in the current month (up to today) to log your daily symptoms. 
           Completed days will be marked with a green checkmark. You can track up to 20 days per month.
         </p>
         <div className="mt-2 text-xs text-blue-600">
@@ -213,25 +216,28 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
           moreLinkClick="popover"
           eventDisplay="block"
           dayCellClassNames={(info) => {
-            const today = startOfDay(new Date());
-            const cellDate = startOfDay(new Date(info.date));
+            const cellDate = new Date(info.date);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
             
-            // Future dates
-            if (isAfter(cellDate, today)) {
+            // Future dates (after today)
+            if (cellDate > today) {
               return 'fc-day-future';
             }
             
-            // Past month dates
-            if (!isCurrentMonth(info.dateStr)) {
+            // Past month dates (not current month)
+            if (!isSameMonth(cellDate, currentMonth)) {
               return 'fc-day-past-month';
             }
             
-            return '';
+            // Current month, valid dates
+            return 'fc-day-current-month';
           }}
-          validRange={{
-            start: `${year}-${month}-01`,
-            end: `${year}-${month}-31`
-          }}
+          // Remove validRange to allow navigation between months
+          // validRange={{
+          //   start: `${year}-${month}-01`,
+          //   end: `${year}-${month}-31`
+          // }}
         />
       </div>
 
@@ -245,6 +251,7 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
       )}
 
       <style jsx>{`
+        /* Future dates - faded and not clickable */
         .fc-day-future {
           background-color: #f3f4f6 !important;
           opacity: 0.5;
@@ -253,6 +260,8 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
         .fc-day-future:hover {
           background-color: #f3f4f6 !important;
         }
+        
+        /* Past month dates - very faded and not clickable */
         .fc-day-past-month {
           background-color: #f9fafb !important;
           opacity: 0.3;
@@ -260,6 +269,39 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
         }
         .fc-day-past-month:hover {
           background-color: #f9fafb !important;
+        }
+        
+        /* Current month dates - normal appearance and clickable */
+        .fc-day-current-month {
+          background-color: white !important;
+          opacity: 1;
+          cursor: pointer !important;
+        }
+        .fc-day-current-month:hover {
+          background-color: #f8fafc !important;
+        }
+        
+        /* Override FullCalendar's default styles for current month */
+        .fc-day-current-month .fc-daygrid-day-frame {
+          cursor: pointer !important;
+        }
+        
+        /* Ensure events are visible on current month dates */
+        .fc-day-current-month .fc-event {
+          opacity: 1 !important;
+        }
+        
+        /* Make sure the calendar doesn't have global opacity issues */
+        .calendar-container .fc {
+          opacity: 1 !important;
+        }
+        
+        .calendar-container .fc-view-harness {
+          opacity: 1 !important;
+        }
+        
+        .calendar-container .fc-daygrid {
+          opacity: 1 !important;
         }
       `}</style>
     </div>
