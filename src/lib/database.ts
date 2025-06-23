@@ -120,6 +120,30 @@ const ensureTablesExistForOperation = async (operation: string): Promise<void> =
   }
 };
 
+// Get current month key (YYYY-MM format)
+const getCurrentMonthKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Get month key from date string
+const getMonthKeyFromDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Get start and end dates for a month
+const getMonthDateRange = (monthKey: string): { startDate: string; endDate: string } => {
+  const [year, month] = monthKey.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0); // Last day of the month
+  
+  return {
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0]
+  };
+};
+
 // Save symptom entry with better error handling
 export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
   try {
@@ -188,7 +212,7 @@ export const getSymptomEntry = async (userId: string, date: string): Promise<Sym
   }
 };
 
-// Get all symptom entries for a user
+// Get all symptom entries for a user for current month (limited to 20 most recent)
 export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry[]> => {
   try {
     const currentUserId = await ensureAuthenticated();
@@ -199,25 +223,75 @@ export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry
     // Ensure tables exist
     await ensureTablesExistForOperation('get symptom entries');
 
+    // Get current month's data
+    const currentMonth = getCurrentMonthKey();
+    const { startDate, endDate } = getMonthDateRange(currentMonth);
+
+    console.log(`📅 Getting entries for current month: ${currentMonth} (${startDate} to ${endDate})`);
+
     const { data, error } = await supabase
       .from('symptom_entries')
       .select('*')
       .eq('user_id', userId)
-      .order('date', { ascending: true });
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false })
+      .limit(20); // Limit to 20 most recent entries
 
     if (error) {
       console.error('Supabase get all error:', error);
       handleSupabaseError(error, 'get entries');
     }
 
-    return data ? data.map(transformFromDBFormat) : [];
+    const entries = data ? data.map(transformFromDBFormat).reverse() : []; // Reverse to get chronological order
+    console.log(`📊 Found ${entries.length} entries for current month`);
+    
+    return entries;
   } catch (error: any) {
     console.error('Get all symptom entries error:', error);
     throw error;
   }
 };
 
-// Update user progress with better error handling
+// Get symptom entries for a specific month
+export const getSymptomEntriesForMonth = async (userId: string, monthKey: string): Promise<SymptomEntry[]> => {
+  try {
+    const currentUserId = await ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
+    // Ensure tables exist
+    await ensureTablesExistForOperation('get symptom entries for month');
+
+    const { startDate, endDate } = getMonthDateRange(monthKey);
+
+    console.log(`📅 Getting entries for month: ${monthKey} (${startDate} to ${endDate})`);
+
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error('Supabase get month entries error:', error);
+      handleSupabaseError(error, 'get month entries');
+    }
+
+    const entries = data ? data.map(transformFromDBFormat) : [];
+    console.log(`📊 Found ${entries.length} entries for month ${monthKey}`);
+    
+    return entries;
+  } catch (error: any) {
+    console.error('Get symptom entries for month error:', error);
+    throw error;
+  }
+};
+
+// Update user progress with 20-day limit enforcement for current month
 export const updateUserProgress = async (userId: string, progress: UserProgress): Promise<void> => {
   try {
     const currentUserId = await ensureAuthenticated();
@@ -230,12 +304,25 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
 
     console.log('Updating user progress:', { userId, progress });
 
+    // Get current month
+    const currentMonth = getCurrentMonthKey();
+    
+    // Enforce 20-day limit for current month
+    const limitedProgress = {
+      ...progress,
+      totalDays: 20, // Always enforce 20-day limit
+      completedDays: Math.min(progress.completedDays, 20),
+      completedDates: progress.completedDates
+        .filter(date => getMonthKeyFromDate(date) === currentMonth) // Only current month dates
+        .slice(0, 20) // Limit to first 20 dates
+    };
+
     const dbProgress: UserProgressDB = {
       user_id: userId,
-      completed_days: progress.completedDays,
-      total_days: progress.totalDays,
-      start_date: progress.startDate,
-      completed_dates: progress.completedDates,
+      completed_days: limitedProgress.completedDays,
+      total_days: limitedProgress.totalDays,
+      start_date: limitedProgress.startDate,
+      completed_dates: limitedProgress.completedDates,
     };
 
     const { data, error } = await supabase
@@ -259,7 +346,7 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
   }
 };
 
-// Get user progress
+// Get user progress with 20-day limit enforcement for current month
 export const getUserProgress = async (userId: string): Promise<UserProgress | null> => {
   try {
     const currentUserId = await ensureAuthenticated();
@@ -281,11 +368,13 @@ export const getUserProgress = async (userId: string): Promise<UserProgress | nu
       handleSupabaseError(error, 'get progress');
     }
 
+    const currentMonth = getCurrentMonthKey();
+
     if (!data) {
       // Create default progress if none exists
       const defaultProgress: UserProgress = {
         completedDays: 0,
-        totalDays: 20,
+        totalDays: 20, // Always 20 days
         startDate: new Date().toISOString().split('T')[0],
         completedDates: []
       };
@@ -294,23 +383,35 @@ export const getUserProgress = async (userId: string): Promise<UserProgress | nu
       return defaultProgress;
     }
 
-    return {
-      completedDays: data.completed_days,
-      totalDays: data.total_days,
+    // Filter completed dates to only include current month
+    const currentMonthDates = data.completed_dates.filter(date => 
+      getMonthKeyFromDate(date) === currentMonth
+    );
+
+    // Enforce 20-day limit on existing data for current month
+    const limitedProgress: UserProgress = {
+      completedDays: Math.min(currentMonthDates.length, 20),
+      totalDays: 20, // Always enforce 20-day limit
       startDate: data.start_date,
-      completedDates: data.completed_dates
+      completedDates: currentMonthDates.slice(0, 20) // Limit to first 20 dates
     };
+
+    console.log(`📊 User progress for month ${currentMonth}:`, limitedProgress);
+    return limitedProgress;
   } catch (error: any) {
     console.error('Get user progress error:', error);
     throw error;
   }
 };
 
-// Get symptom entries for ML prediction
+// Get symptom entries for ML prediction (limited to 20 days from current month)
 export const getSymptomEntriesForPrediction = async (userId: string): Promise<any[]> => {
   const entries = await getAllSymptomEntries(userId);
   
-  return entries.map(entry => ({
+  // Limit to 20 most recent entries for prediction
+  const limitedEntries = entries.slice(0, 20);
+  
+  return limitedEntries.map(entry => ({
     'Irregular / Missed periods': entry.irregularPeriods ? 1 : 0,
     'Cramping': entry.cramping ? 1 : 0,
     'Menstrual clots': entry.menstrualClots ? 1 : 0,
@@ -343,7 +444,7 @@ export const getSymptomEntriesForPrediction = async (userId: string): Promise<an
   }));
 };
 
-// Subscribe to real-time changes for symptom entries
+// Subscribe to real-time changes for symptom entries (current month only)
 export const subscribeToSymptomEntries = (userId: string, callback: (entries: SymptomEntry[]) => void) => {
   return supabase
     .channel('symptom_entries_changes')
@@ -357,7 +458,7 @@ export const subscribeToSymptomEntries = (userId: string, callback: (entries: Sy
       },
       async () => {
         try {
-          // Fetch updated data when changes occur
+          // Fetch updated data when changes occur (current month only)
           const entries = await getAllSymptomEntries(userId);
           callback(entries);
         } catch (error) {
@@ -391,6 +492,44 @@ export const subscribeToUserProgress = (userId: string, callback: (progress: Use
       }
     )
     .subscribe();
+};
+
+// Get available months for user (for month selection)
+export const getAvailableMonths = async (userId: string): Promise<string[]> => {
+  try {
+    const currentUserId = await ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .select('date')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Supabase get available months error:', error);
+      handleSupabaseError(error, 'get available months');
+    }
+
+    if (!data || data.length === 0) {
+      return [getCurrentMonthKey()]; // Return current month if no data
+    }
+
+    // Extract unique months from dates
+    const months = new Set<string>();
+    data.forEach(entry => {
+      const monthKey = getMonthKeyFromDate(entry.date);
+      months.add(monthKey);
+    });
+
+    // Sort months in descending order (most recent first)
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  } catch (error: any) {
+    console.error('Get available months error:', error);
+    return [getCurrentMonthKey()];
+  }
 };
 
 // Test Supabase connection and table existence

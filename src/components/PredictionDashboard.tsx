@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { SymptomEntry } from '../types';
-import { getSymptomEntriesForPrediction, getAllSymptomEntries } from '../lib/database';
+import { getSymptomEntriesForPrediction, getAllSymptomEntries, getSymptomEntriesForMonth } from '../lib/database';
 import { dummyPredictionResults } from '../utils/dummyData';
 import PredictionExplanation from './PredictionExplanation';
 import { Brain, TrendingUp, Calendar, AlertCircle, CheckCircle, Database, Clock, BarChart3, PieChart, Activity } from 'lucide-react';
@@ -23,9 +23,10 @@ interface PredictionDashboardProps {
   user: User;
   completedDays: number;
   isComplete: boolean;
+  selectedMonth: string;
 }
 
-const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, completedDays, isComplete }) => {
+const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, completedDays, isComplete, selectedMonth }) => {
   const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -36,6 +37,13 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
   const canPredict = completedDays >= 5; // Minimum days for prediction
   const maxDays = 20; // Maximum tracking days
   const effectiveCompletedDays = Math.min(completedDays, maxDays);
+
+  // Format month display
+  const formatMonthDisplay = (monthKey: string): string => {
+    const [year, month] = monthKey.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  };
 
   const transformSymptomData = (entries: SymptomEntry[]) => {
     // Only use the first 20 days of data
@@ -103,7 +111,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       return null;
     }
 
-    console.log('🔍 Generating stats for entries:', limitedEntries.length);
+    console.log(`🔍 Generating stats for ${formatMonthDisplay(selectedMonth)} - ${limitedEntries.length} entries`);
     console.log('📊 Sample entry structure:', limitedEntries[0]);
 
     // Log all boolean fields in first entry to see what we're working with
@@ -156,7 +164,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       // Calculate percentage of days where this category had symptoms
       const percentage = limitedEntries.length > 0 ? Math.round((categoryDaysWithSymptoms / limitedEntries.length) * 100) : 0;
       
-      console.log(`📊 ${category} FINAL STATS:`);
+      console.log(`📊 ${category} FINAL STATS for ${formatMonthDisplay(selectedMonth)}:`);
       console.log(`   - Days with symptoms: ${categoryDaysWithSymptoms}/${limitedEntries.length}`);
       console.log(`   - Total occurrences: ${totalOccurrences}`);
       console.log(`   - Percentage: ${percentage}%`);
@@ -222,7 +230,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
 
     const overallSymptomRate = limitedEntries.length > 0 ? Math.round((totalSymptomDays / limitedEntries.length) * 100) : 0;
 
-    console.log('\n📈 OVERALL STATISTICS:');
+    console.log(`\n📈 OVERALL STATISTICS for ${formatMonthDisplay(selectedMonth)}:`);
     console.log(`   - Total days analyzed: ${limitedEntries.length}`);
     console.log(`   - Days with any symptoms: ${totalSymptomDays}`);
     console.log(`   - Symptom-free days: ${limitedEntries.length - totalSymptomDays}`);
@@ -234,7 +242,8 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       totalDays: limitedEntries.length,
       totalSymptomDays,
       symptomFreeDays: limitedEntries.length - totalSymptomDays,
-      overallSymptomRate
+      overallSymptomRate,
+      monthDisplayName: formatMonthDisplay(selectedMonth)
     };
 
     console.log('\n🎯 FINAL STATS OBJECT:', finalStats);
@@ -288,14 +297,14 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     setUsingDummyData(false);
 
     try {
-      console.log('🚀 Starting prediction analysis...');
+      console.log(`🚀 Starting prediction analysis for ${formatMonthDisplay(selectedMonth)}...`);
       
-      // Get user's symptom entries directly (not the transformed version)
+      // Get user's symptom entries for current month
       const entries = await getAllSymptomEntries(user.id);
-      console.log('📥 Raw entries from database:', entries);
+      console.log(`📥 Raw entries from database for ${formatMonthDisplay(selectedMonth)}:`, entries);
       
       if (entries.length === 0) {
-        throw new Error('No symptom data found. Please log some symptoms first.');
+        throw new Error(`No symptom data found for ${formatMonthDisplay(selectedMonth)}. Please log some symptoms first.`);
       }
 
       // Limit to 20 days for prediction
@@ -303,7 +312,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       console.log('📊 Limited entries for analysis:', limitedEntries);
       
       if (limitedEntries.length < 5) {
-        throw new Error(`Need at least 5 days of data for analysis. You have ${limitedEntries.length} days.`);
+        throw new Error(`Need at least 5 days of data for analysis. You have ${limitedEntries.length} days for ${formatMonthDisplay(selectedMonth)}.`);
       }
 
       // Generate symptom statistics
@@ -328,7 +337,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
         if (response.ok) {
           const result = await response.json();
           setPredictionResult(result);
-          toast.success(`Analysis completed using ${limitedEntries.length} days of data!`);
+          toast.success(`Analysis completed for ${formatMonthDisplay(selectedMonth)} using ${limitedEntries.length} days of data!`);
           return;
         }
       } catch (apiError) {
@@ -339,7 +348,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       const dummyResult = generateDummyPrediction(limitedEntries);
       setPredictionResult(dummyResult);
       setUsingDummyData(true);
-      toast.success(`Demo analysis generated using ${limitedEntries.length} days!`);
+      toast.success(`Demo analysis generated for ${formatMonthDisplay(selectedMonth)} using ${limitedEntries.length} days!`);
 
     } catch (err: any) {
       console.error('Analysis error:', err);
@@ -377,17 +386,17 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
             <Activity className="h-8 w-8 text-primary-600" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                Health Pattern Analysis
+                Monthly Health Analysis
               </h2>
               <p className="text-sm text-gray-600">
-                Understand your symptoms and get personalized insights
+                Analyze your symptom patterns for {formatMonthDisplay(selectedMonth)}
               </p>
             </div>
           </div>
           <div className="flex items-center space-x-4 text-sm text-gray-500">
             <div className="flex items-center space-x-1">
               <Database className="h-4 w-4" />
-              <span>Secure Data</span>
+              <span>Monthly Data</span>
             </div>
             <div className="flex items-center space-x-1">
               <Calendar className="h-4 w-4" />
@@ -402,16 +411,16 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           </div>
         </div>
 
-        {/* 20-day limit info */}
+        {/* Monthly tracking info */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
             <Clock className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-blue-800 font-medium">20-Day Analysis Period</p>
+              <p className="text-blue-800 font-medium">Monthly Analysis - {formatMonthDisplay(selectedMonth)}</p>
               <p className="text-blue-700 text-sm">
-                Our analysis uses up to 20 days of your symptom data for the most accurate insights. 
-                {effectiveCompletedDays < maxDays && ` You have ${maxDays - effectiveCompletedDays} days remaining.`}
-                {isComplete && ' Your tracking period is complete!'}
+                Analysis is based on up to 20 days of symptom data from this month for accurate insights. 
+                {effectiveCompletedDays < maxDays && ` You have ${maxDays - effectiveCompletedDays} days remaining this month.`}
+                {isComplete && ' This month\'s tracking is complete!'}
               </p>
             </div>
           </div>
@@ -422,10 +431,10 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
             <div className="flex items-center space-x-2">
               <AlertCircle className="h-5 w-5 text-yellow-600" />
               <div>
-                <p className="text-yellow-800 font-medium">More data needed</p>
+                <p className="text-yellow-800 font-medium">More data needed for {formatMonthDisplay(selectedMonth)}</p>
                 <p className="text-yellow-700 text-sm">
-                  Track at least 5 days of symptoms to generate an analysis. 
-                  You currently have {effectiveCompletedDays} days logged.
+                  Track at least 5 days of symptoms to generate a monthly analysis. 
+                  You currently have {effectiveCompletedDays} days logged for this month.
                 </p>
               </div>
             </div>
@@ -448,8 +457,8 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               <div>
                 <p className="text-yellow-800 font-medium">Demo Analysis</p>
                 <p className="text-yellow-700 text-sm">
-                  Using sample analysis based on {effectiveCompletedDays} days of your data. 
-                  Your data is being read securely from our database.
+                  Using sample analysis based on {effectiveCompletedDays} days of data from {formatMonthDisplay(selectedMonth)}. 
+                  Your monthly data is being read securely from our database.
                 </p>
               </div>
             </div>
@@ -460,10 +469,10 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           <div className="text-center py-8">
             <Activity className="h-16 w-16 text-primary-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Ready for Analysis
+              Ready for Monthly Analysis
             </h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Analyze your {effectiveCompletedDays} days of symptom patterns 
+              Analyze your {effectiveCompletedDays} days of symptom patterns from {formatMonthDisplay(selectedMonth)} 
               to get personalized insights about your health.
             </p>
             <button
@@ -474,12 +483,12 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Analyzing {effectiveCompletedDays} Days...
+                  Analyzing {formatMonthDisplay(selectedMonth)}...
                 </>
               ) : (
                 <>
                   <Activity className="h-4 w-4 mr-2" />
-                  Analyze My Symptoms ({effectiveCompletedDays} days)
+                  Analyze {formatMonthDisplay(selectedMonth)} ({effectiveCompletedDays} days)
                 </>
               )}
             </button>
@@ -494,7 +503,9 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center space-x-2 mb-4">
               <BarChart3 className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Symptom Categories</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Symptom Categories - {symptomStats.monthDisplayName}
+              </h3>
             </div>
             <div className="space-y-4">
               {symptomStats.categoryStats.map((category: any, index: number) => (
@@ -535,7 +546,9 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center space-x-2 mb-4">
               <PieChart className="h-5 w-5 text-primary-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Most Frequent Symptoms</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Most Frequent Symptoms - {symptomStats.monthDisplayName}
+              </h3>
             </div>
             {symptomStats.topSymptoms.length > 0 ? (
               <div className="space-y-3">
@@ -558,7 +571,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               <div className="text-center py-8 text-gray-500">
                 <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No frequent symptoms detected</p>
-                <p className="text-xs">This indicates mostly symptom-free days</p>
+                <p className="text-xs">This indicates mostly symptom-free days this month</p>
               </div>
             )}
           </div>
@@ -574,14 +587,14 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               {getRiskIcon(predictionResult.risk_level)}
               <div className="flex-1">
                 <h3 className="text-lg font-semibold">
-                  Health Pattern Analysis Results
+                  Monthly Health Analysis Results
                 </h3>
                 <p className="text-sm opacity-90">
-                  {predictionResult.risk_level} Risk Level
+                  {predictionResult.risk_level} Risk Level for {formatMonthDisplay(selectedMonth)}
                   {usingDummyData && <span className="ml-2">(Demo)</span>}
                 </p>
                 <p className="text-xs opacity-75 mt-1">
-                  Based on {effectiveCompletedDays} days of symptom data
+                  Based on {effectiveCompletedDays} days of symptom data from this month
                 </p>
               </div>
               <div className="text-right">
@@ -599,7 +612,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
             {/* Visual Risk Indicator */}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Risk Assessment</span>
+                <span>Monthly Risk Assessment</span>
                 <span>{Math.round(predictionResult.probabilities.endometriosis * 100)}%</span>
               </div>
               <div className="w-full bg-white bg-opacity-30 rounded-full h-3">
@@ -633,8 +646,8 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h4 className="font-medium text-gray-900 mb-2">Important Information</h4>
             <p className="text-sm text-gray-600">
-              This analysis is based on your symptom patterns over {effectiveCompletedDays} days 
-              and is for informational purposes only. It does not constitute medical advice 
+              This monthly analysis is based on your symptom patterns over {effectiveCompletedDays} days 
+              from {formatMonthDisplay(selectedMonth)} and is for informational purposes only. It does not constitute medical advice 
               or diagnosis. Please consult with a healthcare professional for proper 
               medical evaluation and diagnosis.
             </p>

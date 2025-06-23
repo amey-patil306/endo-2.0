@@ -6,10 +6,10 @@ import ProgressBar from './ProgressBar';
 import PredictionDashboard from './PredictionDashboard';
 import SupabaseDemoPanel from './SupabaseDemoPanel';
 import { UserProgress } from '../types';
-import { getUserProgress, subscribeToUserProgress } from '../lib/database';
+import { getUserProgress, subscribeToUserProgress, updateUserProgress, getAvailableMonths } from '../lib/database';
 import { getSupabaseDummyManager } from '../utils/supabaseDummyManager';
 import toast from 'react-hot-toast';
-import { LogOut, Heart, Brain, Database, Calendar as CalendarIcon } from 'lucide-react';
+import { LogOut, Heart, Brain, Database, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -18,7 +18,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [progress, setProgress] = useState<UserProgress>({
     completedDays: 0,
-    totalDays: 20,
+    totalDays: 20, // Fixed to 20 days
     startDate: new Date().toISOString().split('T')[0],
     completedDates: []
   });
@@ -26,9 +26,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [hasData, setHasData] = useState(false);
   const [showDemoPrompt, setShowDemoPrompt] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [showMonthSelector, setShowMonthSelector] = useState(false);
+
+  // Get current month key
+  const getCurrentMonthKey = (): string => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  // Format month key for display
+  const formatMonthDisplay = (monthKey: string): string => {
+    const [year, month] = monthKey.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  };
 
   useEffect(() => {
     loadUserProgress();
+    loadAvailableMonths();
     
     // Subscribe to real-time progress updates
     const subscription = subscribeToUserProgress(user.id, (updatedProgress) => {
@@ -65,6 +82,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
   };
 
+  const loadAvailableMonths = async () => {
+    try {
+      const months = await getAvailableMonths(user.id);
+      setAvailableMonths(months);
+      
+      // Set current month as selected by default
+      const currentMonth = getCurrentMonthKey();
+      setSelectedMonth(currentMonth);
+    } catch (error) {
+      console.error('Error loading available months:', error);
+      setSelectedMonth(getCurrentMonthKey());
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -81,6 +112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const handleDataLoaded = () => {
     loadUserProgress();
+    loadAvailableMonths();
     setShowDemoPrompt(false);
   };
 
@@ -88,6 +120,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const dummyManager = getSupabaseDummyManager(user.id);
     await dummyManager.loadMayScenario('moderateRisk');
     handleDataLoaded();
+  };
+
+  const handleNewMonth = async () => {
+    try {
+      const newProgress: UserProgress = {
+        completedDays: 0,
+        totalDays: 20,
+        startDate: new Date().toISOString().split('T')[0],
+        completedDates: []
+      };
+      
+      await updateUserProgress(user.id, newProgress);
+      setProgress(newProgress);
+      setHasData(false);
+      
+      // Reload available months
+      await loadAvailableMonths();
+      
+      toast.success('New month started! Begin tracking your symptoms.');
+    } catch (error) {
+      console.error('Error starting new month:', error);
+      toast.error('Failed to start new month');
+    }
   };
 
   if (loading) {
@@ -101,6 +156,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     );
   }
 
+  const progressPercentage = Math.min((progress.completedDays / progress.totalDays) * 100, 100);
+  const canPredict = progress.completedDays >= 5; // Minimum 5 days for prediction
+  const isComplete = progress.completedDays >= progress.totalDays;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -113,21 +172,68 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <h1 className="text-2xl font-bold text-gray-900">
                   Endometriosis Tracker
                 </h1>
-                <p className="text-sm text-gray-600">
-                  Welcome back, {user.email}
-                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                    Supabase Powered
+                <div className="flex items-center space-x-4">
+                  <p className="text-sm text-gray-600">
+                    Welcome back, {user.email}
+                  </p>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    Monthly Tracking
                   </span>
-                </p>
+                </div>
               </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <LogOut className="h-5 w-5 mr-2" />
-              Sign Out
-            </button>
+            
+            <div className="flex items-center space-x-4">
+              {/* Month Selector */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMonthSelector(!showMonthSelector)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  <CalendarIcon className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {formatMonthDisplay(selectedMonth)}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                </button>
+                
+                {showMonthSelector && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                    <div className="py-1">
+                      {availableMonths.map((month) => (
+                        <button
+                          key={month}
+                          onClick={() => {
+                            setSelectedMonth(month);
+                            setShowMonthSelector(false);
+                            // Reload data for selected month if needed
+                            if (month !== getCurrentMonthKey()) {
+                              toast.info(`Viewing data for ${formatMonthDisplay(month)}`);
+                            }
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                            month === selectedMonth ? 'bg-primary-50 text-primary-700' : 'text-gray-700'
+                          }`}
+                        >
+                          {formatMonthDisplay(month)}
+                          {month === getCurrentMonthKey() && (
+                            <span className="ml-2 text-xs text-green-600">(Current)</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <button
+                onClick={handleSignOut}
+                className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <LogOut className="h-5 w-5 mr-2" />
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -139,10 +245,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="flex items-start space-x-4">
               <CalendarIcon className="h-8 w-8 text-blue-600 mt-1" />
               <div className="flex-1">
-                <h3 className="text-xl font-semibold text-blue-900">Welcome to Your Health Tracker!</h3>
+                <h3 className="text-xl font-semibold text-blue-900">Welcome to Monthly Health Tracking!</h3>
                 <p className="text-blue-800 mt-2">
-                  Start tracking your symptoms to get AI-powered insights. We've prepared complete May 2024 sample data 
-                  to help you explore all features immediately.
+                  Track your symptoms for up to 20 days each month to get AI-powered insights. Data is organized by month 
+                  for better pattern analysis. We've prepared sample data to help you explore all features.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <button
@@ -150,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center"
                   >
                     <CalendarIcon className="h-5 w-5 mr-2" />
-                    Load May 2024 Sample Data
+                    Load Sample Month Data
                   </button>
                   <button
                     onClick={() => setShowDemoPrompt(false)}
@@ -160,7 +266,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   </button>
                 </div>
                 <p className="text-sm text-blue-600 mt-3">
-                  💡 Sample data includes 31 days of realistic symptoms, cycle tracking, and notes
+                  💡 Monthly tracking helps identify patterns and provides more accurate analysis
                 </p>
               </div>
               <button
@@ -187,10 +293,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               }`}
             >
               <Heart className="h-4 w-4 inline mr-2" />
-              Symptom Tracking
+              Monthly Tracking
               {hasData && (
                 <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  {progress.completedDays} days
+                  {Math.min(progress.completedDays, 20)}/20 days
                 </span>
               )}
             </button>
@@ -203,10 +309,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               }`}
             >
               <Brain className="h-4 w-4 inline mr-2" />
-              AI Analysis
-              {progress.completedDays >= 5 && (
+              Monthly Analysis
+              {canPredict && (
                 <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   Ready
+                </span>
+              )}
+              {isComplete && (
+                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Complete
                 </span>
               )}
             </button>
@@ -222,20 +333,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  Your Progress
+                  Monthly Progress ({formatMonthDisplay(selectedMonth)})
                 </h2>
                 <div className="flex items-center text-sm text-gray-500">
                   <Database className="h-4 w-4 mr-1" />
                   Real-time sync
                 </div>
               </div>
-              <ProgressBar progress={progress} />
+              <ProgressBar progress={progress} onNewMonth={handleNewMonth} />
             </div>
 
             {/* Calendar Section */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Daily Symptom Tracking
+                Daily Symptom Tracking - {formatMonthDisplay(selectedMonth)}
               </h2>
               <Calendar 
                 userId={user.id} 
@@ -249,38 +360,40 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             {/* Prediction Dashboard */}
             <PredictionDashboard 
               user={user}
-              completedDays={progress.completedDays}
+              completedDays={Math.min(progress.completedDays, 20)}
+              isComplete={isComplete}
+              selectedMonth={selectedMonth}
             />
 
             {/* Progress Summary for Prediction Tab */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Data Summary
+                Monthly Data Summary - {formatMonthDisplay(selectedMonth)}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-blue-600">
-                    {progress.completedDays}
+                    {Math.min(progress.completedDays, 20)}
                   </div>
                   <div className="text-sm text-blue-800">Days Tracked</div>
                 </div>
                 <div className="bg-green-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-green-600">
-                    {Math.round((progress.completedDays / progress.totalDays) * 100)}%
+                    {Math.round(progressPercentage)}%
                   </div>
-                  <div className="text-sm text-green-800">Progress</div>
+                  <div className="text-sm text-green-800">Monthly Progress</div>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-purple-600">
-                    {progress.completedDays >= 5 ? 'Ready' : 'Pending'}
+                    {canPredict ? 'Ready' : 'Pending'}
                   </div>
-                  <div className="text-sm text-purple-800">AI Analysis</div>
+                  <div className="text-sm text-purple-800">Analysis Status</div>
                 </div>
                 <div className="bg-indigo-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-indigo-600">
-                    Real-time
+                    {availableMonths.length}
                   </div>
-                  <div className="text-sm text-indigo-800">Supabase Sync</div>
+                  <div className="text-sm text-indigo-800">Months Tracked</div>
                 </div>
               </div>
             </div>
