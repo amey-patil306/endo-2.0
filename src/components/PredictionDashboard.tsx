@@ -98,31 +98,39 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
   const generateSymptomStats = (entries: SymptomEntry[]) => {
     const limitedEntries = entries.slice(0, maxDays);
     
+    if (limitedEntries.length === 0) {
+      return null;
+    }
+
     const symptomCategories = {
-      'Pain Symptoms': ['cramping', 'chronicPain', 'legPain', 'hipPain', 'vaginalPain', 'painfulUrination', 'painAfterIntercourse'],
+      'Pain Symptoms': ['cramping', 'chronicPain', 'legPain', 'hipPain', 'vaginalPain', 'painfulUrination', 'painAfterIntercourse', 'abdominalCrampsIntercourse'],
       'Menstrual Symptoms': ['irregularPeriods', 'menstrualClots', 'longMenstruation', 'abnormalBleeding'],
-      'Digestive Symptoms': ['diarrhea', 'vomiting', 'extremeBloating', 'digestiveProblems', 'lossOfAppetite'],
-      'General Health': ['migraines', 'depression', 'insomnia', 'anemia', 'feelingSick'],
+      'Digestive Symptoms': ['diarrhea', 'vomiting', 'extremeBloating', 'digestiveProblems', 'lossOfAppetite', 'feelingSick'],
+      'General Health': ['migraines', 'depression', 'insomnia', 'anemia'],
       'Reproductive Health': ['infertility', 'fertilityIssues', 'ovarianCysts', 'cysts', 'hormonalProblems']
     };
 
     const categoryStats = Object.entries(symptomCategories).map(([category, symptoms]) => {
-      const totalOccurrences = symptoms.reduce((sum, symptom) => {
-        return sum + limitedEntries.filter(entry => entry[symptom as keyof SymptomEntry] === true).length;
-      }, 0);
+      // Count how many days each symptom occurred
+      const symptomOccurrences = symptoms.map(symptom => {
+        return limitedEntries.filter(entry => entry[symptom as keyof SymptomEntry] === true).length;
+      });
       
-      const maxPossible = symptoms.length * limitedEntries.length;
-      const percentage = maxPossible > 0 ? (totalOccurrences / maxPossible) * 100 : 0;
+      // Calculate average occurrence rate for this category
+      const totalOccurrences = symptomOccurrences.reduce((sum, count) => sum + count, 0);
+      const averageOccurrenceRate = totalOccurrences / (symptoms.length * limitedEntries.length);
+      const percentage = Math.round(averageOccurrenceRate * 100);
       
       return {
         category,
-        percentage: Math.round(percentage),
+        percentage,
         occurrences: totalOccurrences,
+        avgDaysPerSymptom: Math.round(totalOccurrences / symptoms.length),
         color: getCategoryColor(category)
       };
     });
 
-    // Most frequent symptoms
+    // Most frequent individual symptoms
     const allSymptoms = [
       { key: 'cramping', label: 'Cramping' },
       { key: 'chronicPain', label: 'Chronic Pain' },
@@ -131,29 +139,40 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       { key: 'depression', label: 'Mood Changes' },
       { key: 'irregularPeriods', label: 'Irregular Periods' },
       { key: 'digestiveProblems', label: 'Digestive Issues' },
-      { key: 'insomnia', label: 'Sleep Issues' }
+      { key: 'insomnia', label: 'Sleep Issues' },
+      { key: 'painAfterIntercourse', label: 'Pain After Intercourse' },
+      { key: 'ovarianCysts', label: 'Ovarian Cysts' }
     ];
 
     const topSymptoms = allSymptoms
-      .map(symptom => ({
-        ...symptom,
-        count: limitedEntries.filter(entry => entry[symptom.key as keyof SymptomEntry] === true).length,
-        percentage: Math.round((limitedEntries.filter(entry => entry[symptom.key as keyof SymptomEntry] === true).length / limitedEntries.length) * 100)
-      }))
+      .map(symptom => {
+        const count = limitedEntries.filter(entry => entry[symptom.key as keyof SymptomEntry] === true).length;
+        return {
+          ...symptom,
+          count,
+          percentage: Math.round((count / limitedEntries.length) * 100)
+        };
+      })
       .filter(symptom => symptom.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
+
+    // Overall statistics
+    const totalSymptomDays = limitedEntries.filter(entry => 
+      Object.keys(entry).some(key => 
+        typeof entry[key as keyof SymptomEntry] === 'boolean' && 
+        entry[key as keyof SymptomEntry] === true &&
+        key !== 'date' && key !== 'timestamp'
+      )
+    ).length;
 
     return {
       categoryStats,
       topSymptoms,
       totalDays: limitedEntries.length,
-      totalSymptomDays: limitedEntries.filter(entry => 
-        Object.keys(entry).some(key => 
-          typeof entry[key as keyof SymptomEntry] === 'boolean' && 
-          entry[key as keyof SymptomEntry] === true
-        )
-      ).length
+      totalSymptomDays,
+      symptomFreeDays: limitedEntries.length - totalSymptomDays,
+      overallSymptomRate: Math.round((totalSymptomDays / limitedEntries.length) * 100)
     };
   };
 
@@ -409,16 +428,33 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
                 <div key={index} className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-gray-700">{category.category}</span>
-                    <span className="text-sm text-gray-600">{category.percentage}%</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-gray-900">{category.percentage}%</span>
+                      <div className="text-xs text-gray-500">{category.occurrences} occurrences</div>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-3">
                     <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${category.color}`}
-                      style={{ width: `${category.percentage}%` }}
+                      className={`h-3 rounded-full transition-all duration-500 ${category.color}`}
+                      style={{ width: `${Math.max(category.percentage, 2)}%` }}
                     />
                   </div>
                 </div>
               ))}
+            </div>
+            
+            {/* Overall Stats */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="text-lg font-bold text-blue-600">{symptomStats.overallSymptomRate}%</div>
+                  <div className="text-xs text-blue-800">Days with symptoms</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3">
+                  <div className="text-lg font-bold text-green-600">{symptomStats.symptomFreeDays}</div>
+                  <div className="text-xs text-green-800">Symptom-free days</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -428,22 +464,30 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               <PieChart className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-gray-900">Most Frequent Symptoms</h3>
             </div>
-            <div className="space-y-3">
-              {symptomStats.topSymptoms.map((symptom: any, index: number) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                      <span className="text-primary-600 font-semibold text-sm">{index + 1}</span>
+            {symptomStats.topSymptoms.length > 0 ? (
+              <div className="space-y-3">
+                {symptomStats.topSymptoms.map((symptom: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                        <span className="text-primary-600 font-semibold text-sm">{index + 1}</span>
+                      </div>
+                      <span className="font-medium text-gray-900">{symptom.label}</span>
                     </div>
-                    <span className="font-medium text-gray-900">{symptom.label}</span>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-gray-900">{symptom.count} days</div>
+                      <div className="text-xs text-gray-600">{symptom.percentage}% of days</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold text-gray-900">{symptom.count} days</div>
-                    <div className="text-xs text-gray-600">{symptom.percentage}%</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No frequent symptoms detected</p>
+                <p className="text-xs">This indicates mostly symptom-free days</p>
+              </div>
+            )}
           </div>
         </div>
       )}
