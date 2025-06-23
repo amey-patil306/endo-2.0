@@ -46,6 +46,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [userQuery, setUserQuery] = useState('');
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
+  const [questionHistory, setQuestionHistory] = useState<Array<{question: string, answer: string}>>([]);
 
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel.toLowerCase()) {
@@ -198,6 +199,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       const isApiAvailable = await checkApiAvailability();
       
       if (!isApiAvailable) {
+        console.log('⚠️ API not available, using fallback answer');
         throw new Error('RAG API not available for questions');
       }
 
@@ -226,14 +228,23 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       const result = await response.json();
       console.log('✅ Question response received:', result);
       
-      // Update explanation with the new answer
-      if (explanation && result.answer) {
-        const updatedExplanation = {
-          ...explanation,
-          explanation: result.answer
-        };
-        setExplanation(updatedExplanation);
-        console.log('🔄 Updated explanation with new answer');
+      // Add to question history
+      if (result.answer) {
+        const newQA = { question, answer: result.answer };
+        setQuestionHistory(prev => [...prev, newQA]);
+        
+        // Also update the main explanation if we have one
+        if (explanation) {
+          const updatedExplanation = {
+            ...explanation,
+            explanation: result.answer
+          };
+          setExplanation(updatedExplanation);
+        }
+        
+        console.log('🔄 Added question and answer to history');
+      } else {
+        throw new Error('No answer received from API');
       }
       
       setUserQuery('');
@@ -242,16 +253,63 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
     } catch (err: any) {
       console.error('❌ Error asking question:', err);
       
-      if (err.name === 'AbortError' || err.message.includes('timeout')) {
-        setError('Question request timed out. Please try again.');
-      } else {
-        setError('Unable to get answer from the explanation service. Please try again later.');
+      // Generate fallback answer
+      const fallbackAnswer = getFallbackAnswer(question, predictionResult.risk_level);
+      const newQA = { question, answer: fallbackAnswer };
+      setQuestionHistory(prev => [...prev, newQA]);
+      
+      if (explanation) {
+        const updatedExplanation = {
+          ...explanation,
+          explanation: fallbackAnswer
+        };
+        setExplanation(updatedExplanation);
       }
       
+      console.log('🔄 Used fallback answer for question');
+      setUserQuery('');
       setApiAvailable(false);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getFallbackAnswer = (question: string, riskLevel: string): string => {
+    const lowerQuestion = question.toLowerCase();
+    const probability = Math.round(predictionResult.probabilities.endometriosis * 100);
+    
+    if (lowerQuestion.includes('next steps') || lowerQuestion.includes('what should i do')) {
+      if (riskLevel.toLowerCase() === 'high') {
+        return `With your ${probability}% risk score, I recommend scheduling an appointment with a gynecologist as soon as possible. Bring your symptom tracking data and prepare a list of questions. Don't let anyone dismiss your concerns - you know your body best.`;
+      } else if (riskLevel.toLowerCase() === 'moderate') {
+        return `Your ${probability}% risk score suggests you should schedule a consultation with a gynecologist to discuss your symptoms. Continue tracking your symptoms and consider discussing your family history with your doctor.`;
+      } else {
+        return `With your ${probability}% risk score, continue monitoring your symptoms and maintain regular gynecological check-ups. If symptoms worsen or new symptoms develop, don't hesitate to consult a healthcare provider.`;
+      }
+    }
+    
+    if (lowerQuestion.includes('accurate') || lowerQuestion.includes('accuracy')) {
+      return `This analysis is based on symptom patterns and machine learning, but it's important to understand that only a healthcare professional can provide a definitive diagnosis. The tool is designed to help you understand when to seek medical care and what information to share with your doctor.`;
+    }
+    
+    if (lowerQuestion.includes('concerning') || lowerQuestion.includes('symptoms')) {
+      return `The most concerning symptoms that warrant medical attention include severe pelvic pain that interferes with daily activities, heavy or irregular bleeding, pain during intercourse, and persistent digestive issues. Any combination of these symptoms, especially if they're getting worse, should be evaluated by a healthcare provider.`;
+    }
+    
+    if (lowerQuestion.includes('doctor') || lowerQuestion.includes('see')) {
+      if (riskLevel.toLowerCase() === 'high') {
+        return `You should see a doctor as soon as possible, ideally within the next few weeks. Look for a gynecologist who has experience with endometriosis and pelvic pain. Don't delay if your symptoms are severe or getting worse.`;
+      } else {
+        return `Consider scheduling an appointment with a gynecologist within the next few months, or sooner if your symptoms worsen. Regular check-ups are important for monitoring your reproductive health.`;
+      }
+    }
+    
+    if (lowerQuestion.includes('treatment') || lowerQuestion.includes('options')) {
+      return `Treatment options for endometriosis vary depending on severity and symptoms. They can include pain management with medications, hormonal therapies like birth control pills, and in some cases, surgical options. The best treatment plan depends on your specific situation, symptoms, and goals, which is why it's important to work with a healthcare provider.`;
+    }
+    
+    // Default response
+    return `That's a great question about your health. With your ${probability}% risk score, I recommend discussing this specific concern with a healthcare provider who can give you personalized medical advice based on your complete health history and a thorough examination.`;
   };
 
   const getFallbackExplanation = (riskLevel: string): string => {
@@ -488,6 +546,28 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 </div>
               </div>
 
+              {/* Question History */}
+              {questionHistory.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <HelpCircle className="h-5 w-5 mr-2 text-purple-600" />
+                    Your Questions & Answers
+                  </h3>
+                  {questionHistory.map((qa, index) => (
+                    <div key={index} className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <div className="mb-2">
+                        <span className="text-sm font-medium text-purple-900">Q: </span>
+                        <span className="text-sm text-purple-800">{qa.question}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-purple-900">A: </span>
+                        <span className="text-sm text-purple-700">{qa.answer}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Recommendations */}
               <div>
                 <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
@@ -521,66 +601,60 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 </div>
               </div>
 
-              {/* Ask Questions Section - Only show if API is available */}
-              {apiAvailable && (
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-                  <h4 className="font-medium text-purple-900 mb-3 flex items-center">
-                    <HelpCircle className="h-4 w-4 mr-2" />
-                    Ask Follow-up Questions
-                  </h4>
-                  
-                  {/* Common Questions */}
-                  <div className="mb-4">
-                    <p className="text-sm text-purple-700 mb-2">Quick questions:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {commonQuestions.map((question, index) => (
-                        <button
-                          key={index}
-                          onClick={() => askQuestion(question)}
-                          disabled={loading}
-                          className="text-xs bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full transition-colors disabled:opacity-50"
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Custom Question */}
-                  <div className="flex space-x-3">
-                    <input
-                      type="text"
-                      value={userQuery}
-                      onChange={(e) => setUserQuery(e.target.value)}
-                      placeholder="Ask your own question..."
-                      className="flex-1 input-field text-sm"
-                      onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
-                    />
-                    <button
-                      onClick={handleAskQuestion}
-                      disabled={!userQuery.trim() || loading}
-                      className="btn-primary disabled:opacity-50 text-sm px-4 py-2"
-                    >
-                      Ask
-                    </button>
+              {/* Ask Questions Section */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-medium text-purple-900 mb-3 flex items-center">
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  Ask Follow-up Questions
+                </h4>
+                
+                {/* Common Questions */}
+                <div className="mb-4">
+                  <p className="text-sm text-purple-700 mb-2">Quick questions:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {commonQuestions.map((question, index) => (
+                      <button
+                        key={index}
+                        onClick={() => askQuestion(question)}
+                        disabled={loading}
+                        className="text-xs bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full transition-colors disabled:opacity-50"
+                      >
+                        {question}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
 
-              {/* Offline Questions Notice */}
-              {apiAvailable === false && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <WifiOff className="h-4 w-4 text-gray-600" />
-                    <div>
-                      <p className="text-gray-800 font-medium">Interactive Q&A Unavailable</p>
-                      <p className="text-gray-600 text-sm">
-                        Start the RAG API server to enable interactive questions and AI-powered explanations.
-                      </p>
-                    </div>
-                  </div>
+                {/* Custom Question */}
+                <div className="flex space-x-3">
+                  <input
+                    type="text"
+                    value={userQuery}
+                    onChange={(e) => setUserQuery(e.target.value)}
+                    placeholder="Ask your own question..."
+                    className="flex-1 input-field text-sm"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
+                  />
+                  <button
+                    onClick={handleAskQuestion}
+                    disabled={!userQuery.trim() || loading}
+                    className="btn-primary disabled:opacity-50 text-sm px-4 py-2"
+                  >
+                    {loading ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    ) : (
+                      'Ask'
+                    )}
+                  </button>
                 </div>
-              )}
+                
+                <p className="text-xs text-purple-600 mt-2">
+                  {apiAvailable ? 
+                    'Powered by Llama AI for accurate medical information' : 
+                    'Using built-in medical knowledge base'
+                  }
+                </p>
+              </div>
             </div>
           )}
         </div>
