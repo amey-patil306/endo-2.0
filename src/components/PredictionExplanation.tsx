@@ -47,6 +47,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
   const [userQuery, setUserQuery] = useState('');
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
   const [questionHistory, setQuestionHistory] = useState<Array<{question: string, answer: string}>>([]);
+  const [currentAnswer, setCurrentAnswer] = useState<string>('');
 
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel.toLowerCase()) {
@@ -191,6 +192,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
     
     setLoading(true);
     setError(null);
+    setCurrentAnswer(''); // Clear previous answer
 
     console.log('❓ Asking question:', question);
 
@@ -228,21 +230,16 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       const result = await response.json();
       console.log('✅ Question response received:', result);
       
-      // Add to question history
-      if (result.answer) {
+      // Set the current answer to display
+      if (result.answer && result.answer.trim()) {
+        setCurrentAnswer(result.answer);
+        
+        // Add to question history
         const newQA = { question, answer: result.answer };
         setQuestionHistory(prev => [...prev, newQA]);
         
-        // Also update the main explanation if we have one
-        if (explanation) {
-          const updatedExplanation = {
-            ...explanation,
-            explanation: result.answer
-          };
-          setExplanation(updatedExplanation);
-        }
-        
         console.log('🔄 Added question and answer to history');
+        console.log('📝 Current answer set:', result.answer);
       } else {
         throw new Error('No answer received from API');
       }
@@ -255,18 +252,13 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       
       // Generate fallback answer
       const fallbackAnswer = getFallbackAnswer(question, predictionResult.risk_level);
+      setCurrentAnswer(fallbackAnswer);
+      
       const newQA = { question, answer: fallbackAnswer };
       setQuestionHistory(prev => [...prev, newQA]);
       
-      if (explanation) {
-        const updatedExplanation = {
-          ...explanation,
-          explanation: fallbackAnswer
-        };
-        setExplanation(updatedExplanation);
-      }
-      
       console.log('🔄 Used fallback answer for question');
+      console.log('📝 Fallback answer set:', fallbackAnswer);
       setUserQuery('');
       setApiAvailable(false);
     } finally {
@@ -546,61 +538,6 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 </div>
               </div>
 
-              {/* Question History */}
-              {questionHistory.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-gray-900 flex items-center">
-                    <HelpCircle className="h-5 w-5 mr-2 text-purple-600" />
-                    Your Questions & Answers
-                  </h3>
-                  {questionHistory.map((qa, index) => (
-                    <div key={index} className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <div className="mb-2">
-                        <span className="text-sm font-medium text-purple-900">Q: </span>
-                        <span className="text-sm text-purple-800">{qa.question}</span>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-purple-900">A: </span>
-                        <span className="text-sm text-purple-700">{qa.answer}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Recommendations */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                  <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
-                  Recommended Next Steps
-                </h3>
-                <div className="grid gap-4">
-                  {explanation.recommendations.map((rec, index) => (
-                    <div
-                      key={index}
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-900">
-                            {rec.action}
-                          </span>
-                          {rec.priority && (
-                            <span className={`px-2 py-1 text-xs rounded-full border ${getPriorityColor(rec.priority)}`}>
-                              {rec.priority} priority
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                          {rec.category}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">{rec.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Ask Questions Section */}
               <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
                 <h4 className="font-medium text-purple-900 mb-3 flex items-center">
@@ -654,6 +591,78 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                     'Using built-in medical knowledge base'
                   }
                 </p>
+              </div>
+
+              {/* Current Answer Display - This is the key fix! */}
+              {currentAnswer && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-start space-x-2">
+                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="font-medium text-green-900 mb-2">Latest Answer</h4>
+                      <div className="text-green-800 text-sm leading-relaxed whitespace-pre-line">
+                        {currentAnswer}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Question History */}
+              {questionHistory.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <HelpCircle className="h-5 w-5 mr-2 text-purple-600" />
+                    Your Questions & Answers ({questionHistory.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {questionHistory.slice().reverse().map((qa, index) => (
+                      <div key={index} className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-purple-900">Q: </span>
+                          <span className="text-sm text-purple-800">{qa.question}</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-purple-900">A: </span>
+                          <span className="text-sm text-purple-700 whitespace-pre-line">{qa.answer}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommendations */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                  <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+                  Recommended Next Steps
+                </h3>
+                <div className="grid gap-4">
+                  {explanation.recommendations.map((rec, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {rec.action}
+                          </span>
+                          {rec.priority && (
+                            <span className={`px-2 py-1 text-xs rounded-full border ${getPriorityColor(rec.priority)}`}>
+                              {rec.priority} priority
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {rec.category}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">{rec.description}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
