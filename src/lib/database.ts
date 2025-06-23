@@ -71,6 +71,30 @@ const transformFromDBFormat = (dbEntry: SymptomEntryDB): SymptomEntry => ({
   timestamp: new Date(dbEntry.created_at || dbEntry.date).getTime(),
 });
 
+// Get current month key (YYYY-MM format)
+const getCurrentMonthKey = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Get month key from date string
+const getMonthKeyFromDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Get start and end dates for a month
+const getMonthDateRange = (monthKey: string): { startDate: string; endDate: string } => {
+  const [year, month] = monthKey.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0); // Last day of the month
+  
+  return {
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0]
+  };
+};
+
 // Ensure user is authenticated
 const ensureAuthenticated = async (): Promise<string> => {
   const user = await getCurrentUser();
@@ -120,30 +144,6 @@ const ensureTablesExistForOperation = async (operation: string): Promise<void> =
   }
 };
 
-// Get current month key (YYYY-MM format)
-const getCurrentMonthKey = (): string => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-};
-
-// Get month key from date string
-const getMonthKeyFromDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-};
-
-// Get start and end dates for a month
-const getMonthDateRange = (monthKey: string): { startDate: string; endDate: string } => {
-  const [year, month] = monthKey.split('-').map(Number);
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0); // Last day of the month
-  
-  return {
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0]
-  };
-};
-
 // Save symptom entry with better error handling
 export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
   try {
@@ -156,7 +156,7 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
     // Ensure tables exist
     await ensureTablesExistForOperation('save symptom entry');
 
-    console.log('Saving symptom entry:', { userId, date: entry.date });
+    console.log('💾 Saving symptom entry:', { userId, date: entry.date });
 
     const dbEntry = transformToDBFormat(entry, userId);
 
@@ -175,7 +175,7 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
       handleSupabaseError(error, 'save entry');
     }
 
-    console.log('Successfully saved symptom entry:', data);
+    console.log('✅ Successfully saved symptom entry:', data);
   } catch (error: any) {
     console.error('Save symptom entry error:', error);
     throw error;
@@ -302,7 +302,7 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
     // Ensure tables exist
     await ensureTablesExistForOperation('update user progress');
 
-    console.log('Updating user progress:', { userId, progress });
+    console.log('📈 Updating user progress:', { userId, progress });
 
     // Get current month
     const currentMonth = getCurrentMonthKey();
@@ -339,7 +339,7 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
       handleSupabaseError(error, 'update progress');
     }
 
-    console.log('Successfully updated user progress:', data);
+    console.log('✅ Successfully updated user progress:', data);
   } catch (error: any) {
     console.error('Update user progress error:', error);
     throw error;
@@ -383,21 +383,28 @@ export const getUserProgress = async (userId: string): Promise<UserProgress | nu
       return defaultProgress;
     }
 
-    // Filter completed dates to only include current month
-    const currentMonthDates = data.completed_dates.filter(date => 
-      getMonthKeyFromDate(date) === currentMonth
-    );
+    // Get actual current month entries to sync progress
+    const currentMonthEntries = await getAllSymptomEntries(userId);
+    const currentMonthDates = currentMonthEntries.map(entry => entry.date);
 
-    // Enforce 20-day limit on existing data for current month
-    const limitedProgress: UserProgress = {
+    // Create progress based on actual current month data
+    const syncedProgress: UserProgress = {
       completedDays: Math.min(currentMonthDates.length, 20),
       totalDays: 20, // Always enforce 20-day limit
       startDate: data.start_date,
       completedDates: currentMonthDates.slice(0, 20) // Limit to first 20 dates
     };
 
-    console.log(`📊 User progress for month ${currentMonth}:`, limitedProgress);
-    return limitedProgress;
+    console.log(`📊 User progress for month ${currentMonth}:`, syncedProgress);
+    
+    // Update the database with synced progress if different
+    if (syncedProgress.completedDays !== data.completed_days || 
+        JSON.stringify(syncedProgress.completedDates) !== JSON.stringify(data.completed_dates)) {
+      console.log('🔄 Syncing progress with actual data...');
+      await updateUserProgress(userId, syncedProgress);
+    }
+    
+    return syncedProgress;
   } catch (error: any) {
     console.error('Get user progress error:', error);
     throw error;
@@ -523,6 +530,9 @@ export const getAvailableMonths = async (userId: string): Promise<string[]> => {
       const monthKey = getMonthKeyFromDate(entry.date);
       months.add(monthKey);
     });
+
+    // Always include current month
+    months.add(getCurrentMonthKey());
 
     // Sort months in descending order (most recent first)
     return Array.from(months).sort((a, b) => b.localeCompare(a));
