@@ -4,7 +4,7 @@ import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 // Your Firebase config - make sure this is correct
 const firebaseConfig = {
-  apiKey: "AIzaSyBXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  apiKey: "AIzaSyAGkmgVeHSvy_m4Ux361ljd7KzrtqTTyQ0",
   authDomain: "endo-efbc7.firebaseapp.com",
   projectId: "endo-efbc7",
   storageBucket: "endo-efbc7.appspot.com",
