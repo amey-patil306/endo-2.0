@@ -21,7 +21,7 @@ export class SupabaseDummyManager {
     }
   }
 
-  // Load May 2024 dummy data for specific scenario
+  // Load May 2024 dummy data for specific scenario (limited to 20 days)
   async loadMayScenario(scenario: 'highRisk' | 'moderateRisk' | 'lowRisk'): Promise<void> {
     try {
       const scenarioData = mayScenarios[scenario];
@@ -29,22 +29,32 @@ export class SupabaseDummyManager {
 
       const { entries, progress } = scenarioData.generator(this.userId);
       
+      // Limit to 20 days
+      const limitedEntries = entries.slice(0, 20);
+      
       // Save all entries in batches to avoid overwhelming the database
       const batchSize = 5;
-      for (let i = 0; i < entries.length; i += batchSize) {
-        const batch = entries.slice(i, i + batchSize);
+      for (let i = 0; i < limitedEntries.length; i += batchSize) {
+        const batch = limitedEntries.slice(i, i + batchSize);
         await Promise.all(batch.map(entry => saveSymptomEntry(this.userId, entry)));
         
         // Show progress
-        const progressPercent = Math.round(((i + batch.length) / entries.length) * 100);
+        const progressPercent = Math.round(((i + batch.length) / limitedEntries.length) * 100);
         toast.loading(`Loading ${scenarioData.name}... ${progressPercent}%`);
       }
 
-      // Update progress
-      await updateUserProgress(this.userId, progress);
+      // Update progress with 20-day limit
+      const limitedProgress: UserProgress = {
+        ...progress,
+        totalDays: 20,
+        completedDays: Math.min(limitedEntries.length, 20),
+        completedDates: limitedEntries.map(e => e.date).slice(0, 20)
+      };
+
+      await updateUserProgress(this.userId, limitedProgress);
 
       toast.dismiss();
-      toast.success(`${scenarioData.name} loaded successfully! (${entries.length} days)`);
+      toast.success(`${scenarioData.name} loaded successfully! (${limitedEntries.length} days)`);
     } catch (error) {
       toast.dismiss();
       toast.error('Failed to load May 2024 data');
@@ -52,7 +62,7 @@ export class SupabaseDummyManager {
     }
   }
 
-  // Load custom May data with specific parameters
+  // Load custom May data with specific parameters (limited to 20 days)
   async loadCustomMayData(options: {
     riskLevel?: 'high' | 'moderate' | 'low';
     symptomIntensity?: number; // 0-1 scale
@@ -68,8 +78,11 @@ export class SupabaseDummyManager {
         this.userId
       );
 
+      // Limit to 20 days
+      const limitedBaseEntries = baseEntries.slice(0, 20);
+
       // Adjust symptom intensity
-      const adjustedEntries = baseEntries.map(entry => {
+      const adjustedEntries = limitedBaseEntries.map(entry => {
         const adjustedEntry = { ...entry };
         
         // Randomly reduce symptoms based on intensity
@@ -94,7 +107,15 @@ export class SupabaseDummyManager {
         await saveSymptomEntry(this.userId, entry);
       }
 
-      await updateUserProgress(this.userId, progress);
+      // Update progress with 20-day limit
+      const limitedProgress: UserProgress = {
+        ...progress,
+        totalDays: 20,
+        completedDays: Math.min(adjustedEntries.length, 20),
+        completedDates: adjustedEntries.map(e => e.date).slice(0, 20)
+      };
+
+      await updateUserProgress(this.userId, limitedProgress);
 
       toast.dismiss();
       toast.success(`Custom May 2024 data loaded! (${adjustedEntries.length} days)`);
@@ -105,12 +126,12 @@ export class SupabaseDummyManager {
     }
   }
 
-  // Clear all user data
+  // Clear all user data and reset to new 20-day period
   async clearAllData(): Promise<void> {
     try {
       toast.loading('Clearing all data...');
 
-      // Reset progress (this will effectively clear the data since we're using Supabase)
+      // Reset progress to start new 20-day period
       const emptyProgress: UserProgress = {
         completedDays: 0,
         totalDays: 20,
@@ -121,7 +142,7 @@ export class SupabaseDummyManager {
       await updateUserProgress(this.userId, emptyProgress);
 
       toast.dismiss();
-      toast.success('All data cleared successfully!');
+      toast.success('All data cleared successfully! Ready for new 20-day tracking period.');
     } catch (error) {
       toast.dismiss();
       toast.error('Failed to clear data');
@@ -129,19 +150,29 @@ export class SupabaseDummyManager {
     }
   }
 
-  // Add additional random days to existing data
+  // Add additional random days to existing data (respecting 20-day limit)
   async addRandomDays(numberOfDays: number = 5): Promise<void> {
     try {
       const currentProgress = await getUserProgress(this.userId);
       if (!currentProgress) return;
 
-      toast.loading(`Adding ${numberOfDays} random days...`);
+      // Check if we're already at the 20-day limit
+      if (currentProgress.completedDays >= 20) {
+        toast.error('Already at 20-day limit! Start a new month to continue tracking.');
+        return;
+      }
+
+      // Limit additional days to not exceed 20 total
+      const maxAdditionalDays = 20 - currentProgress.completedDays;
+      const actualDaysToAdd = Math.min(numberOfDays, maxAdditionalDays);
+
+      toast.loading(`Adding ${actualDaysToAdd} random days...`);
 
       // Generate random entries for recent dates
       const entries: SymptomEntry[] = [];
       const today = new Date();
       
-      for (let i = 0; i < numberOfDays; i++) {
+      for (let i = 0; i < actualDaysToAdd; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() - i - 1);
         const dateString = date.toISOString().split('T')[0];
@@ -190,24 +221,53 @@ export class SupabaseDummyManager {
         await saveSymptomEntry(this.userId, entry);
       }
 
-      // Update progress
+      // Update progress with 20-day limit enforcement
+      const newCompletedDays = Math.min(currentProgress.completedDays + entries.length, 20);
       const updatedProgress: UserProgress = {
         ...currentProgress,
-        completedDays: currentProgress.completedDays + entries.length,
+        totalDays: 20,
+        completedDays: newCompletedDays,
         completedDates: [
           ...currentProgress.completedDates,
           ...entries.map(e => e.date)
-        ]
+        ].slice(0, 20) // Ensure we don't exceed 20 dates
       };
 
       await updateUserProgress(this.userId, updatedProgress);
 
       toast.dismiss();
-      toast.success(`Added ${entries.length} random days!`);
+      if (newCompletedDays >= 20) {
+        toast.success(`Added ${entries.length} days! 20-day tracking period complete!`);
+      } else {
+        toast.success(`Added ${entries.length} random days! ${20 - newCompletedDays} days remaining.`);
+      }
     } catch (error) {
       toast.dismiss();
       toast.error('Failed to add random days');
       console.error('Error adding random days:', error);
+    }
+  }
+
+  // Start a new 20-day tracking period
+  async startNewMonth(): Promise<void> {
+    try {
+      toast.loading('Starting new 20-day tracking period...');
+
+      const newProgress: UserProgress = {
+        completedDays: 0,
+        totalDays: 20,
+        startDate: new Date().toISOString().split('T')[0],
+        completedDates: []
+      };
+
+      await updateUserProgress(this.userId, newProgress);
+
+      toast.dismiss();
+      toast.success('New 20-day tracking period started!');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('Failed to start new tracking period');
+      console.error('Error starting new month:', error);
     }
   }
 }
