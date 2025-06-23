@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { SymptomEntry } from '../types';
-import { getSymptomEntriesForPrediction } from '../lib/database';
+import { getSymptomEntriesForPrediction, getAllSymptomEntries } from '../lib/database';
 import { dummyPredictionResults } from '../utils/dummyData';
 import PredictionExplanation from './PredictionExplanation';
 import { Brain, TrendingUp, Calendar, AlertCircle, CheckCircle, Database, Clock, BarChart3, PieChart, Activity } from 'lucide-react';
@@ -99,10 +99,19 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     const limitedEntries = entries.slice(0, maxDays);
     
     if (limitedEntries.length === 0) {
+      console.log('No entries found for stats generation');
       return null;
     }
 
-    console.log('Generating stats for entries:', limitedEntries.length);
+    console.log('🔍 Generating stats for entries:', limitedEntries.length);
+    console.log('📊 Sample entry structure:', limitedEntries[0]);
+
+    // Log all boolean fields in first entry to see what we're working with
+    const firstEntry = limitedEntries[0];
+    const booleanFields = Object.keys(firstEntry).filter(key => 
+      typeof firstEntry[key as keyof SymptomEntry] === 'boolean'
+    );
+    console.log('🔢 Boolean fields found:', booleanFields);
 
     const symptomCategories = {
       'Pain Symptoms': ['cramping', 'chronicPain', 'legPain', 'hipPain', 'vaginalPain', 'painfulUrination', 'painAfterIntercourse', 'abdominalCrampsIntercourse'],
@@ -113,28 +122,44 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     };
 
     const categoryStats = Object.entries(symptomCategories).map(([category, symptoms]) => {
+      console.log(`\n📋 Processing category: ${category}`);
+      console.log(`🎯 Symptoms to check: ${symptoms.join(', ')}`);
+      
       // Count total days where ANY symptom in this category occurred
       let categoryDaysWithSymptoms = 0;
       let totalOccurrences = 0;
       
       // For each day, check if any symptom in this category occurred
-      limitedEntries.forEach(entry => {
+      limitedEntries.forEach((entry, dayIndex) => {
         let dayHasSymptom = false;
+        let daySymptoms: string[] = [];
+        
         symptoms.forEach(symptom => {
-          if (entry[symptom as keyof SymptomEntry] === true) {
+          const symptomValue = entry[symptom as keyof SymptomEntry];
+          console.log(`  Day ${dayIndex + 1}, ${symptom}: ${symptomValue} (type: ${typeof symptomValue})`);
+          
+          if (symptomValue === true) {
             totalOccurrences++;
             dayHasSymptom = true;
+            daySymptoms.push(symptom);
           }
         });
+        
         if (dayHasSymptom) {
           categoryDaysWithSymptoms++;
+          console.log(`  ✅ Day ${dayIndex + 1} has symptoms: ${daySymptoms.join(', ')}`);
+        } else {
+          console.log(`  ❌ Day ${dayIndex + 1} has no symptoms in this category`);
         }
       });
       
       // Calculate percentage of days where this category had symptoms
-      const percentage = Math.round((categoryDaysWithSymptoms / limitedEntries.length) * 100);
+      const percentage = limitedEntries.length > 0 ? Math.round((categoryDaysWithSymptoms / limitedEntries.length) * 100) : 0;
       
-      console.log(`${category}: ${categoryDaysWithSymptoms}/${limitedEntries.length} days = ${percentage}%`);
+      console.log(`📊 ${category} FINAL STATS:`);
+      console.log(`   - Days with symptoms: ${categoryDaysWithSymptoms}/${limitedEntries.length}`);
+      console.log(`   - Total occurrences: ${totalOccurrences}`);
+      console.log(`   - Percentage: ${percentage}%`);
       
       return {
         category,
@@ -159,13 +184,23 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       { key: 'ovarianCysts', label: 'Ovarian Cysts' }
     ];
 
+    console.log('\n🔍 Analyzing individual symptoms:');
     const topSymptoms = allSymptoms
       .map(symptom => {
-        const count = limitedEntries.filter(entry => entry[symptom.key as keyof SymptomEntry] === true).length;
+        const count = limitedEntries.filter(entry => {
+          const value = entry[symptom.key as keyof SymptomEntry];
+          console.log(`  ${symptom.key}: ${value} (type: ${typeof value})`);
+          return value === true;
+        }).length;
+        
+        const percentage = limitedEntries.length > 0 ? Math.round((count / limitedEntries.length) * 100) : 0;
+        
+        console.log(`  ${symptom.label}: ${count}/${limitedEntries.length} days = ${percentage}%`);
+        
         return {
           ...symptom,
           count,
-          percentage: Math.round((count / limitedEntries.length) * 100)
+          percentage
         };
       })
       .filter(symptom => symptom.count > 0)
@@ -175,27 +210,35 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     // Overall statistics
     const totalSymptomDays = limitedEntries.filter(entry => {
       // Check if this day has any symptoms
-      return Object.keys(entry).some(key => 
-        typeof entry[key as keyof SymptomEntry] === 'boolean' && 
-        entry[key as keyof SymptomEntry] === true &&
-        key !== 'date' && key !== 'timestamp' && key !== 'notes'
-      );
+      const hasSymptoms = Object.keys(entry).some(key => {
+        const value = entry[key as keyof SymptomEntry];
+        const isSymptomField = typeof value === 'boolean' && 
+          key !== 'date' && key !== 'timestamp' && key !== 'notes';
+        return isSymptomField && value === true;
+      });
+      
+      return hasSymptoms;
     }).length;
 
-    console.log('Overall stats:', {
-      totalDays: limitedEntries.length,
-      totalSymptomDays,
-      symptomFreeDays: limitedEntries.length - totalSymptomDays
-    });
+    const overallSymptomRate = limitedEntries.length > 0 ? Math.round((totalSymptomDays / limitedEntries.length) * 100) : 0;
 
-    return {
+    console.log('\n📈 OVERALL STATISTICS:');
+    console.log(`   - Total days analyzed: ${limitedEntries.length}`);
+    console.log(`   - Days with any symptoms: ${totalSymptomDays}`);
+    console.log(`   - Symptom-free days: ${limitedEntries.length - totalSymptomDays}`);
+    console.log(`   - Overall symptom rate: ${overallSymptomRate}%`);
+
+    const finalStats = {
       categoryStats,
       topSymptoms,
       totalDays: limitedEntries.length,
       totalSymptomDays,
       symptomFreeDays: limitedEntries.length - totalSymptomDays,
-      overallSymptomRate: Math.round((totalSymptomDays / limitedEntries.length) * 100)
+      overallSymptomRate
     };
+
+    console.log('\n🎯 FINAL STATS OBJECT:', finalStats);
+    return finalStats;
   };
 
   const getCategoryColor = (category: string) => {
@@ -245,8 +288,11 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     setUsingDummyData(false);
 
     try {
-      // Get user's symptom entries from Supabase
-      const entries = await getSymptomEntriesForPrediction(user.id);
+      console.log('🚀 Starting prediction analysis...');
+      
+      // Get user's symptom entries directly (not the transformed version)
+      const entries = await getAllSymptomEntries(user.id);
+      console.log('📥 Raw entries from database:', entries);
       
       if (entries.length === 0) {
         throw new Error('No symptom data found. Please log some symptoms first.');
@@ -254,21 +300,23 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
 
       // Limit to 20 days for prediction
       const limitedEntries = entries.slice(0, maxDays);
+      console.log('📊 Limited entries for analysis:', limitedEntries);
       
       if (limitedEntries.length < 5) {
         throw new Error(`Need at least 5 days of data for analysis. You have ${limitedEntries.length} days.`);
       }
 
-      console.log('Raw entries from database:', limitedEntries);
-
       // Generate symptom statistics
+      console.log('📈 Generating symptom statistics...');
       const stats = generateSymptomStats(limitedEntries);
-      console.log('Generated stats:', stats);
+      console.log('✅ Generated stats:', stats);
       setSymptomStats(stats);
 
       // Try to call the real API first
       try {
         const transformedData = transformSymptomData(limitedEntries);
+        console.log('🔄 Transformed data for API:', transformedData);
+        
         const response = await fetch('http://localhost:8000/predict', {
           method: 'POST',
           headers: {
