@@ -102,6 +102,8 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       return null;
     }
 
+    console.log('Generating stats for entries:', limitedEntries.length);
+
     const symptomCategories = {
       'Pain Symptoms': ['cramping', 'chronicPain', 'legPain', 'hipPain', 'vaginalPain', 'painfulUrination', 'painAfterIntercourse', 'abdominalCrampsIntercourse'],
       'Menstrual Symptoms': ['irregularPeriods', 'menstrualClots', 'longMenstruation', 'abnormalBleeding'],
@@ -111,21 +113,34 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     };
 
     const categoryStats = Object.entries(symptomCategories).map(([category, symptoms]) => {
-      // Count how many days each symptom occurred
-      const symptomOccurrences = symptoms.map(symptom => {
-        return limitedEntries.filter(entry => entry[symptom as keyof SymptomEntry] === true).length;
+      // Count total days where ANY symptom in this category occurred
+      let categoryDaysWithSymptoms = 0;
+      let totalOccurrences = 0;
+      
+      // For each day, check if any symptom in this category occurred
+      limitedEntries.forEach(entry => {
+        let dayHasSymptom = false;
+        symptoms.forEach(symptom => {
+          if (entry[symptom as keyof SymptomEntry] === true) {
+            totalOccurrences++;
+            dayHasSymptom = true;
+          }
+        });
+        if (dayHasSymptom) {
+          categoryDaysWithSymptoms++;
+        }
       });
       
-      // Calculate average occurrence rate for this category
-      const totalOccurrences = symptomOccurrences.reduce((sum, count) => sum + count, 0);
-      const averageOccurrenceRate = totalOccurrences / (symptoms.length * limitedEntries.length);
-      const percentage = Math.round(averageOccurrenceRate * 100);
+      // Calculate percentage of days where this category had symptoms
+      const percentage = Math.round((categoryDaysWithSymptoms / limitedEntries.length) * 100);
+      
+      console.log(`${category}: ${categoryDaysWithSymptoms}/${limitedEntries.length} days = ${percentage}%`);
       
       return {
         category,
         percentage,
         occurrences: totalOccurrences,
-        avgDaysPerSymptom: Math.round(totalOccurrences / symptoms.length),
+        daysWithSymptoms: categoryDaysWithSymptoms,
         color: getCategoryColor(category)
       };
     });
@@ -158,13 +173,20 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
       .slice(0, 5);
 
     // Overall statistics
-    const totalSymptomDays = limitedEntries.filter(entry => 
-      Object.keys(entry).some(key => 
+    const totalSymptomDays = limitedEntries.filter(entry => {
+      // Check if this day has any symptoms
+      return Object.keys(entry).some(key => 
         typeof entry[key as keyof SymptomEntry] === 'boolean' && 
         entry[key as keyof SymptomEntry] === true &&
-        key !== 'date' && key !== 'timestamp'
-      )
-    ).length;
+        key !== 'date' && key !== 'timestamp' && key !== 'notes'
+      );
+    }).length;
+
+    console.log('Overall stats:', {
+      totalDays: limitedEntries.length,
+      totalSymptomDays,
+      symptomFreeDays: limitedEntries.length - totalSymptomDays
+    });
 
     return {
       categoryStats,
@@ -237,8 +259,11 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
         throw new Error(`Need at least 5 days of data for analysis. You have ${limitedEntries.length} days.`);
       }
 
+      console.log('Raw entries from database:', limitedEntries);
+
       // Generate symptom statistics
       const stats = generateSymptomStats(limitedEntries);
+      console.log('Generated stats:', stats);
       setSymptomStats(stats);
 
       // Try to call the real API first
@@ -430,7 +455,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
                     <span className="text-sm font-medium text-gray-700">{category.category}</span>
                     <div className="text-right">
                       <span className="text-sm font-semibold text-gray-900">{category.percentage}%</span>
-                      <div className="text-xs text-gray-500">{category.occurrences} occurrences</div>
+                      <div className="text-xs text-gray-500">{category.daysWithSymptoms} of {symptomStats.totalDays} days</div>
                     </div>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
