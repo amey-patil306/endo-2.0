@@ -5,12 +5,12 @@ import { auth } from '../firebase/config';
 import Calendar from './Calendar';
 import ProgressBar from './ProgressBar';
 import PredictionDashboard from './PredictionDashboard';
-import DummyDataPanel from './DummyDataPanel';
+import SupabaseDemoPanel from './SupabaseDemoPanel';
 import { UserProgress } from '../types';
-import { getUserProgress } from '../firebase/firestore';
-import { getDummyDataManager } from '../utils/dummyDataManager';
+import { getUserProgress, subscribeToUserProgress } from '../lib/database';
+import { getSupabaseDummyManager } from '../utils/supabaseDummyManager';
 import toast from 'react-hot-toast';
-import { LogOut, Heart, Brain, Database } from 'lucide-react';
+import { LogOut, Heart, Brain, Database, Calendar as CalendarIcon } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -26,13 +26,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'tracking' | 'prediction'>('tracking');
   const [hasData, setHasData] = useState(false);
   const [showDemoPrompt, setShowDemoPrompt] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadUserProgress();
+    
+    // Subscribe to real-time progress updates
+    const subscription = subscribeToUserProgress(user.uid, (updatedProgress) => {
+      if (updatedProgress) {
+        setProgress(updatedProgress);
+        setHasData(updatedProgress.completedDays > 0);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [user.uid]);
 
   const loadUserProgress = async () => {
     try {
+      setLoading(true);
       const userProgress = await getUserProgress(user.uid);
       if (userProgress) {
         setProgress(userProgress);
@@ -47,6 +61,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       console.error('Error loading progress:', error);
       // Show demo prompt on error as well
       setTimeout(() => setShowDemoPrompt(true), 2000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -69,11 +85,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     setShowDemoPrompt(false);
   };
 
-  const handleLoadDemoData = async () => {
-    const dummyManager = getDummyDataManager(user.uid);
-    await dummyManager.loadDummyProfile('moderateRisk');
+  const handleLoadMayDemo = async () => {
+    const dummyManager = getSupabaseDummyManager(user.uid);
+    await dummyManager.loadMayScenario('moderateRisk');
     handleDataLoaded();
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -89,6 +116,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 </h1>
                 <p className="text-sm text-gray-600">
                   Welcome back, {user.email}
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    Supabase Powered
+                  </span>
                 </p>
               </div>
             </div>
@@ -106,32 +136,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       {/* Demo Data Prompt */}
       {showDemoPrompt && !hasData && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <Database className="h-6 w-6 text-blue-600 mt-1" />
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-start space-x-4">
+              <CalendarIcon className="h-8 w-8 text-blue-600 mt-1" />
               <div className="flex-1">
-                <h3 className="text-lg font-medium text-blue-900">Welcome to the Demo!</h3>
-                <p className="text-blue-800 mt-1">
-                  It looks like you don't have any symptom data yet. Would you like to load some sample data to explore the features?
+                <h3 className="text-xl font-semibold text-blue-900">Welcome to Your Health Tracker!</h3>
+                <p className="text-blue-800 mt-2">
+                  Start tracking your symptoms to get AI-powered insights. We've prepared complete May 2024 sample data 
+                  to help you explore all features immediately.
                 </p>
-                <div className="mt-4 flex space-x-3">
+                <div className="mt-6 flex flex-wrap gap-3">
                   <button
-                    onClick={handleLoadDemoData}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    onClick={handleLoadMayDemo}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center"
                   >
-                    Load Sample Data
+                    <CalendarIcon className="h-5 w-5 mr-2" />
+                    Load May 2024 Sample Data
                   </button>
                   <button
                     onClick={() => setShowDemoPrompt(false)}
-                    className="bg-white hover:bg-gray-50 text-blue-600 border border-blue-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="bg-white hover:bg-gray-50 text-blue-600 border border-blue-300 px-6 py-3 rounded-lg font-medium transition-colors"
                   >
                     Start Fresh
                   </button>
                 </div>
+                <p className="text-sm text-blue-600 mt-3">
+                  💡 Sample data includes 31 days of realistic symptoms, cycle tracking, and notes
+                </p>
               </div>
               <button
                 onClick={() => setShowDemoPrompt(false)}
-                className="text-blue-400 hover:text-blue-600"
+                className="text-blue-400 hover:text-blue-600 text-xl"
               >
                 ×
               </button>
@@ -154,6 +189,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             >
               <Heart className="h-4 w-4 inline mr-2" />
               Symptom Tracking
+              {hasData && (
+                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  {progress.completedDays} days
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('prediction')}
@@ -181,9 +221,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           <div className="space-y-8">
             {/* Progress Section */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Your Progress
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Your Progress
+                </h2>
+                <div className="flex items-center text-sm text-gray-500">
+                  <Database className="h-4 w-4 mr-1" />
+                  Real-time sync
+                </div>
+              </div>
               <ProgressBar progress={progress} />
             </div>
 
@@ -212,7 +258,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Data Summary
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-blue-600">
                     {progress.completedDays}
@@ -231,14 +277,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   </div>
                   <div className="text-sm text-purple-800">AI Analysis</div>
                 </div>
+                <div className="bg-indigo-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-indigo-600">
+                    Real-time
+                  </div>
+                  <div className="text-sm text-indigo-800">Supabase Sync</div>
+                </div>
               </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* Dummy Data Panel - Only show in development or for demo */}
-      <DummyDataPanel user={user} onDataLoaded={handleDataLoaded} />
+      {/* Supabase Demo Panel */}
+      <SupabaseDemoPanel user={user} onDataLoaded={handleDataLoaded} />
     </div>
   );
 };

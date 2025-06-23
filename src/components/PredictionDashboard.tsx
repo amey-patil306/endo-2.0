@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
 import { SymptomEntry } from '../types';
-import { getSymptomEntriesForPrediction } from '../firebase/firestore';
+import { getSymptomEntriesForPrediction } from '../lib/database';
 import { dummyPredictionResults } from '../utils/dummyData';
 import PredictionExplanation from './PredictionExplanation';
-import { Brain, TrendingUp, Calendar, AlertCircle, CheckCircle, Wifi, WifiOff } from 'lucide-react';
+import { Brain, TrendingUp, Calendar, AlertCircle, CheckCircle, Wifi, WifiOff, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface PredictionResult {
@@ -121,7 +121,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
     setUsingDummyData(false);
 
     try {
-      // Get user's symptom entries
+      // Get user's symptom entries from Supabase
       const entries = await getSymptomEntriesForPrediction(user.uid);
       
       if (entries.length === 0) {
@@ -192,13 +192,19 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               AI Prediction Analysis
             </h2>
             <p className="text-sm text-gray-600">
-              Get insights based on your symptom patterns
+              Get insights based on your Supabase-stored symptom patterns
             </p>
           </div>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <Calendar className="h-4 w-4" />
-          <span>{completedDays} days tracked</span>
+        <div className="flex items-center space-x-4 text-sm text-gray-500">
+          <div className="flex items-center space-x-1">
+            <Database className="h-4 w-4" />
+            <span>Supabase</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <Calendar className="h-4 w-4" />
+            <span>{completedDays} days tracked</span>
+          </div>
         </div>
       </div>
 
@@ -210,7 +216,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               <p className="text-blue-800 font-medium">More data needed</p>
               <p className="text-blue-700 text-sm">
                 Track at least 5 days of symptoms to generate a prediction. 
-                You currently have {completedDays} days logged.
+                You currently have {completedDays} days logged in Supabase.
               </p>
             </div>
           </div>
@@ -234,6 +240,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
               <p className="text-yellow-800 font-medium">Demo Mode</p>
               <p className="text-yellow-700 text-sm">
                 Using simulated prediction results. The ML API is not available.
+                Data is still being read from Supabase in real-time.
               </p>
             </div>
           </div>
@@ -248,7 +255,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
           </h3>
           <p className="text-gray-600 mb-6 max-w-md mx-auto">
             Our machine learning model will analyze your symptom patterns 
-            to provide insights about potential endometriosis risk.
+            stored in Supabase to provide insights about potential endometriosis risk.
           </p>
           <button
             onClick={runPrediction}
@@ -258,7 +265,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Analyzing...
+                Analyzing Supabase Data...
               </>
             ) : (
               <>
@@ -345,7 +352,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
             <h4 className="font-medium text-gray-900 mb-2">Important Disclaimer</h4>
             <p className="text-sm text-gray-600">
               This prediction is based on machine learning analysis of symptom patterns 
-              and is for informational purposes only. It does not constitute medical advice 
+              stored securely in Supabase and is for informational purposes only. It does not constitute medical advice 
               or diagnosis. Please consult with a healthcare professional for proper 
               medical evaluation and diagnosis.
             </p>

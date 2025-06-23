@@ -5,7 +5,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { format, isAfter, startOfDay } from 'date-fns';
 import SymptomModal from './SymptomModal';
 import { SymptomEntry, UserProgress } from '../types';
-import { getSymptomEntry, saveSymptomEntry, updateUserProgress } from '../firebase/firestore';
+import { getSymptomEntry, saveSymptomEntry, updateUserProgress, subscribeToSymptomEntries } from '../lib/database';
 import toast from 'react-hot-toast';
 
 interface CalendarProps {
@@ -23,6 +23,26 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
   useEffect(() => {
     loadCalendarEvents();
   }, [progress.completedDates]);
+
+  useEffect(() => {
+    // Subscribe to real-time updates
+    const subscription = subscribeToSymptomEntries(userId, (entries) => {
+      // Update calendar events when data changes
+      const calendarEvents = entries.map(entry => ({
+        id: entry.date,
+        title: '✓ Completed',
+        date: entry.date,
+        backgroundColor: '#10b981',
+        borderColor: '#10b981',
+        textColor: 'white'
+      }));
+      setEvents(calendarEvents);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId]);
 
   const loadCalendarEvents = () => {
     const calendarEvents = progress.completedDates.map(date => ({
@@ -99,7 +119,7 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
           <strong>Instructions:</strong> Click on any date (except future dates) to log your daily symptoms. 
-          Completed days will be marked with a green checkmark.
+          Completed days will be marked with a green checkmark. Data is automatically synced in real-time.
         </p>
       </div>
 
