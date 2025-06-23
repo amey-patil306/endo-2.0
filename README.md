@@ -1,148 +1,149 @@
-# Endometriosis Symptom Tracker - Phase 1
+# Endometriosis Symptom Tracker
 
-A web-based calendar interface for tracking daily endometriosis symptoms over a 15-20 day period.
+A comprehensive web application for tracking endometriosis symptoms with AI-powered predictions and real-time data synchronization.
 
-## Features
+## 🚀 Quick Setup
 
-- **User Authentication**: Email/password and Google OAuth via Firebase Auth
-- **Calendar Interface**: Interactive calendar for daily symptom logging
-- **Comprehensive Symptom Tracking**: Based on ML model parameters including:
-  - Menstrual symptoms (irregular periods, clots, long menstruation)
-  - Pain symptoms (cramping, chronic pain, leg/hip pain)
-  - Digestive issues (diarrhea, bloating, GI problems)
-  - General health (migraines, depression, insomnia)
-  - Reproductive health (fertility issues, ovarian cysts)
-- **Progress Tracking**: Visual progress bar showing completion status
-- **Data Security**: Firestore with user-specific access rules
+### 1. Supabase Configuration
 
-## Tech Stack
+**IMPORTANT**: You need to configure Supabase before the app will work properly.
 
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
-- **Calendar**: FullCalendar
-- **Authentication**: Firebase Auth
-- **Database**: Firebase Firestore
-- **Build Tool**: Vite
+1. **Create a Supabase Project**:
+   - Go to [supabase.com](https://supabase.com)
+   - Create a new project
+   - Wait for it to be ready
 
-## Setup Instructions
+2. **Get Your Credentials**:
+   - In your Supabase dashboard, go to **Settings > API**
+   - Copy your **Project URL** and **anon public key**
 
-### 1. Firebase Configuration
+3. **Update Environment Variables**:
+   - Open the `.env` file in the project root
+   - Replace the placeholder values:
+   ```env
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
+   ```
 
-1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com)
-2. Enable Authentication with Email/Password and Google providers
-3. Create a Firestore database
-4. Copy your Firebase config and update `src/firebase/config.ts`
+4. **Run Database Migrations**:
+   - In your Supabase dashboard, go to **SQL Editor**
+   - Run these migration files in order:
+     1. `supabase/migrations/20250623202408_mute_block.sql`
+     2. `supabase/migrations/20250623202420_green_tree.sql`
+     3. `supabase/migrations/20250623202427_silver_shape.sql`
 
-### 2. Firestore Security Rules
+### 2. Firebase Configuration (for Authentication)
 
-Deploy the security rules from `firestore.rules` to ensure user data privacy:
+Update `src/firebase/config.ts` with your Firebase credentials:
 
-```bash
-firebase deploy --only firestore:rules
+```typescript
+const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "your-app-id"
+};
 ```
 
-### 3. Install Dependencies
+### 3. Install and Run
 
 ```bash
 npm install
-```
-
-### 4. Run Development Server
-
-```bash
 npm run dev
 ```
 
-## Project Structure
+## 🔧 Troubleshooting
+
+### "Connection: Failed" Error
+
+This usually means your Supabase configuration is incorrect:
+
+1. **Check Environment Variables**:
+   - Ensure `.env` file has correct Supabase URL and key
+   - Restart the dev server after changing `.env`
+
+2. **Verify Database Tables**:
+   - Check if migrations ran successfully in Supabase dashboard
+   - Tables should exist: `symptom_entries`, `user_progress`
+
+3. **Test Connection**:
+   - Open browser console to see detailed error messages
+   - Look for specific error codes or messages
+
+### Common Issues
+
+- **"relation does not exist"**: Database migrations haven't been run
+- **"Invalid API key"**: Wrong anon key in `.env` file
+- **"JWT expired"**: Authentication issue, try signing out and back in
+
+## 📊 Features
+
+- **Real-time Symptom Tracking**: Log daily symptoms with instant sync
+- **AI Predictions**: Machine learning analysis of symptom patterns
+- **Calendar Interface**: Visual tracking with FullCalendar
+- **Progress Monitoring**: Track completion and patterns over time
+- **Demo Data**: Pre-built scenarios for testing and demonstration
+- **Secure Authentication**: Firebase Auth with Google OAuth
+- **Real-time Sync**: Supabase for instant data updates
+
+## 🏗️ Architecture
+
+- **Frontend**: React 18 + TypeScript + Tailwind CSS
+- **Database**: Supabase (PostgreSQL with real-time features)
+- **Authentication**: Firebase Auth
+- **Calendar**: FullCalendar
+- **Build Tool**: Vite
+
+## 📁 Project Structure
 
 ```
 src/
-├── components/
-│   ├── AuthPage.tsx          # Login/signup page
-│   ├── Dashboard.tsx         # Main dashboard
-│   ├── Calendar.tsx          # Calendar component
-│   ├── SymptomModal.tsx      # Symptom entry form
-│   ├── ToggleSwitch.tsx      # Custom toggle component
-│   ├── ProgressBar.tsx       # Progress visualization
-│   └── LoadingSpinner.tsx    # Loading component
-├── firebase/
-│   ├── config.ts             # Firebase configuration
-│   └── firestore.ts          # Database operations
-├── types/
-│   └── index.ts              # TypeScript interfaces
-└── App.tsx                   # Main app component
+├── components/          # React components
+├── lib/                # Database and Supabase utilities
+├── utils/              # Helper functions and dummy data
+├── firebase/           # Firebase configuration
+└── types/              # TypeScript interfaces
+
+supabase/
+└── migrations/         # Database schema migrations
 ```
 
-## Data Schema
+## 🔒 Security
 
-### Symptom Entry
-```typescript
-interface SymptomEntry {
-  // 27 symptom parameters based on ML model
-  irregularPeriods: boolean;
-  cramping: boolean;
-  menstrualClots: boolean;
-  // ... (all ML model parameters)
-  notes?: string;
-  date: string;
-  timestamp: number;
-}
-```
+- Row Level Security (RLS) enabled on all tables
+- User-specific data access only
+- Secure authentication with Firebase
+- Environment variables for sensitive data
 
-### Firestore Structure
-```
-/users/{uid}/logs/{YYYY-MM-DD}
-  → SymptomEntry object
+## 🚀 Deployment
 
-/users/{uid}/metadata/progress
-  → UserProgress object
-```
+The app is ready for deployment to:
+- Vercel
+- Netlify
+- Railway
+- Any static hosting service
 
-## Key Features
+Make sure to set environment variables in your deployment platform.
 
-### 1. Smart Calendar
-- Prevents future date entries
-- Visual indicators for completed days
-- Click-to-log interface
+## 📞 Support
 
-### 2. Comprehensive Symptom Form
-- Organized by symptom categories
-- Toggle switches for easy input
-- Optional notes field
-- Form validation
+If you encounter issues:
 
-### 3. Progress Tracking
-- Visual progress bar
-- Completion percentage
-- Days remaining counter
+1. Check the browser console for error messages
+2. Verify your Supabase and Firebase configurations
+3. Ensure all migrations have been run
+4. Check that environment variables are set correctly
 
-### 4. Data Security
-- User-specific data access
-- Firebase security rules
-- Secure authentication
+## 🎯 Demo Features
 
-## ML Model Integration
+Use the demo panel (bottom-right corner) to:
+- Load complete May 2024 sample data
+- Test different risk scenarios
+- Add random symptom data
+- Clear all data for fresh start
 
-The symptom parameters are directly mapped from your ML model:
-- All 27 feature columns from `predict_user_input.py`
-- Boolean values (0/1) for easy ML processing
-- Export function for prediction data
+---
 
-## Next Steps (Phase 2)
-
-- ML prediction integration
-- Data visualization
-- Export functionality
-- Reminder notifications
-- Advanced analytics
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
+**Note**: This is a health tracking tool for informational purposes only. Always consult healthcare professionals for medical advice.
