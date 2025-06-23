@@ -43,6 +43,7 @@ const symptomCategories = [
       { key: 'digestiveProblems', label: 'Digestive / GI problems' },
       { key: 'lossOfAppetite', label: 'Loss of appetite' },
       { key: 'feelingSick', label: 'Feeling sick' },
+      { key: 'anemia', label: 'Anaemia / Iron deficiency' },
     ]
   },
   {
@@ -51,7 +52,6 @@ const symptomCategories = [
       { key: 'migraines', label: 'Migraines' },
       { key: 'depression', label: 'Depression' },
       { key: 'insomnia', label: 'Insomnia / Sleeplessness' },
-      { key: 'anemia', label: 'Anaemia / Iron deficiency' },
       { key: 'hormonalProblems', label: 'Hormonal problems' },
     ]
   },
@@ -126,9 +126,9 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6 border-b bg-white">
           <h2 className="text-xl font-semibold text-gray-900">
             Log Symptoms for {new Date(date).toLocaleDateString()}
           </h2>
@@ -140,65 +140,64 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="space-y-8">
-              {symptomCategories.map((category) => (
-                <div key={category.title} className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900 border-b pb-2">
-                    {category.title}
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {category.symptoms.map((symptom) => (
-                      <div key={symptom.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <label className="text-sm font-medium text-gray-700 flex-1">
-                          {symptom.label}
-                        </label>
-                        <ToggleSwitch
-                          checked={formData[symptom.key as keyof SymptomEntry] as boolean || false}
-                          onChange={(checked) => handleToggle(symptom.key, checked)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Notes Section */}
-              <div className="space-y-4">
+        {/* Form Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-8">
+            {symptomCategories.map((category) => (
+              <div key={category.title} className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900 border-b pb-2">
-                  Additional Notes
+                  {category.title}
                 </h3>
-                <textarea
-                  value={formData.notes || ''}
-                  onChange={handleNotesChange}
-                  placeholder="Any additional symptoms or notes for today..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-                  rows={4}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {category.symptoms.map((symptom) => (
+                    <div key={symptom.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <label className="text-sm font-medium text-gray-700 flex-1">
+                        {symptom.label}
+                      </label>
+                      <ToggleSwitch
+                        checked={formData[symptom.key as keyof SymptomEntry] as boolean || false}
+                        onChange={(checked) => handleToggle(symptom.key, checked)}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
+            ))}
+
+            {/* Notes Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 border-b pb-2">
+                Additional Notes
+              </h3>
+              <textarea
+                value={formData.notes || ''}
+                onChange={handleNotesChange}
+                placeholder="Any additional symptoms or notes for today..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                rows={4}
+              />
             </div>
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end space-x-4 p-6 border-t bg-gray-50">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn-primary flex items-center"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {existingEntry ? 'Update Entry' : 'Save Entry'}
-            </button>
-          </div>
-        </form>
+        {/* Footer - Fixed at bottom */}
+        <div className="flex items-center justify-end space-x-4 p-6 border-t bg-gray-50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="btn-primary flex items-center"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {existingEntry ? 'Update Entry' : 'Save Entry'}
+          </button>
+        </div>
       </div>
     </div>
   );
