@@ -127,7 +127,7 @@ function App() {
                   </span>
                 </div>
 
-                {supabaseStatus.errors.length > 0 && (
+                {supabaseStatus.errors && supabaseStatus.errors.length > 0 && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <h4 className="font-medium text-red-900 mb-2">Setup Issues:</h4>
                     <ul className="text-sm text-red-800 space-y-1">
