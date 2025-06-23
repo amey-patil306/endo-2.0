@@ -2,14 +2,15 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
-// Your Firebase config - make sure this is correct
+// Your Firebase config - replace these with your actual Firebase project credentials
+// You can find these in your Firebase Console > Project Settings > Your apps
 const firebaseConfig = {
-  apiKey: "AIzaSyAGkmgVeHSvy_m4Ux361ljd7KzrtqTTyQ0",
-  authDomain: "endo-efbc7.firebaseapp.com",
-  projectId: "endo-efbc7",
-  storageBucket: "endo-efbc7.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:abcdefghijklmnop"
+  apiKey: "your-actual-api-key-here",
+  authDomain: "your-project-id.firebaseapp.com",
+  projectId: "your-actual-project-id",
+  storageBucket: "your-project-id.appspot.com",
+  messagingSenderId: "your-actual-messaging-sender-id",
+  appId: "your-actual-app-id"
 };
 
 // Initialize Firebase - check if app already exists to prevent duplicate initialization
