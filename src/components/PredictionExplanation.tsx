@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, Heart, AlertCircle, CheckCircle, Clock, Sparkles, HelpCircle } from 'lucide-react';
+import { MessageCircle, Heart, AlertCircle, CheckCircle, Clock, Sparkles, HelpCircle, Wifi, WifiOff } from 'lucide-react';
 
 interface PredictionResult {
   prediction: number;
@@ -45,6 +45,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userQuery, setUserQuery] = useState('');
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
 
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel.toLowerCase()) {
@@ -72,13 +73,50 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
     }
   };
 
+  // Check if RAG API is available
+  const checkApiAvailability = async (): Promise<boolean> => {
+    try {
+      console.log('🔍 Checking RAG API availability...');
+      const response = await fetch('http://localhost:8001/health', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      
+      const isAvailable = response.ok;
+      console.log(`🌐 RAG API availability: ${isAvailable ? 'Available' : 'Unavailable'}`);
+      setApiAvailable(isAvailable);
+      return isAvailable;
+    } catch (error) {
+      console.warn('⚠️ RAG API not available:', error);
+      setApiAvailable(false);
+      return false;
+    }
+  };
+
   const getExplanation = async (query: string = '') => {
     setLoading(true);
     setError(null);
 
     const defaultQuery = query || `What does my ${Math.round(predictionResult.probabilities.endometriosis * 100)}% risk score mean? What should I do next?`;
 
+    console.log('🚀 Starting explanation generation...');
+    console.log('📝 Query:', defaultQuery);
+    console.log('📊 Prediction result:', predictionResult);
+
     try {
+      // Check API availability first
+      const isApiAvailable = await checkApiAvailability();
+      
+      if (!isApiAvailable) {
+        console.log('⚠️ API not available, using fallback explanation');
+        throw new Error('RAG API not available');
+      }
+
+      console.log('📡 Calling RAG API for explanation...');
+      
       // Try to call the explanation API
       const response = await fetch('http://localhost:8001/explain', {
         method: 'POST',
@@ -89,21 +127,45 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
           user_query: defaultQuery,
           prediction_result: predictionResult,
           use_fallback: false
-        })
+        }),
+        signal: AbortSignal.timeout(30000) // 30 second timeout
       });
 
+      console.log('📡 RAG API response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Explanation service unavailable`);
+        const errorText = await response.text();
+        console.error('❌ RAG API error response:', errorText);
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('✅ RAG API response received:', result);
+
+      if (!result.explanation) {
+        console.warn('⚠️ No explanation in response, using fallback');
+        throw new Error('No explanation received from API');
+      }
+
       setExplanation(result);
-    } catch (err) {
-      console.error('Error getting explanation:', err);
-      setError('Unable to generate detailed explanation at the moment.');
+      setApiAvailable(true);
+      console.log('🎉 Explanation set successfully!');
+
+    } catch (err: any) {
+      console.error('❌ Error getting explanation:', err);
+      
+      // Set specific error messages
+      if (err.name === 'AbortError' || err.message.includes('timeout')) {
+        setError('Request timed out. The explanation service is taking too long to respond.');
+      } else if (err.message.includes('fetch')) {
+        setError('Cannot connect to explanation service. Please make sure the RAG API is running on port 8001.');
+      } else {
+        setError(`Explanation service error: ${err.message}`);
+      }
       
       // Use fallback explanation
-      setExplanation({
+      console.log('🔄 Using fallback explanation...');
+      const fallbackExplanation = {
         explanation: getFallbackExplanation(predictionResult.risk_level),
         recommendations: getFallbackRecommendations(predictionResult.risk_level),
         risk_level: predictionResult.risk_level,
@@ -113,7 +175,11 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
           probability: predictionResult.probabilities.endometriosis,
           risk_level: predictionResult.risk_level
         }
-      });
+      };
+      
+      setExplanation(fallbackExplanation);
+      setApiAvailable(false);
+      console.log('✅ Fallback explanation set');
     } finally {
       setLoading(false);
     }
@@ -125,7 +191,18 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
     setLoading(true);
     setError(null);
 
+    console.log('❓ Asking question:', question);
+
     try {
+      // Check API availability first
+      const isApiAvailable = await checkApiAvailability();
+      
+      if (!isApiAvailable) {
+        throw new Error('RAG API not available for questions');
+      }
+
+      console.log('📡 Calling RAG API for question...');
+
       const response = await fetch('http://localhost:8001/ask', {
         method: 'POST',
         headers: {
@@ -134,27 +211,44 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
         body: JSON.stringify({
           question: question,
           prediction_result: predictionResult
-        })
+        }),
+        signal: AbortSignal.timeout(30000) // 30 second timeout
       });
 
+      console.log('📡 Question API response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Question service unavailable`);
+        const errorText = await response.text();
+        console.error('❌ Question API error:', errorText);
+        throw new Error(`Question API failed: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('✅ Question response received:', result);
       
       // Update explanation with the new answer
-      if (explanation) {
-        setExplanation({
+      if (explanation && result.answer) {
+        const updatedExplanation = {
           ...explanation,
           explanation: result.answer
-        });
+        };
+        setExplanation(updatedExplanation);
+        console.log('🔄 Updated explanation with new answer');
       }
       
       setUserQuery('');
-    } catch (err) {
-      console.error('Error asking question:', err);
-      setError('Unable to get answer at the moment. Please try again later.');
+      setApiAvailable(true);
+
+    } catch (err: any) {
+      console.error('❌ Error asking question:', err);
+      
+      if (err.name === 'AbortError' || err.message.includes('timeout')) {
+        setError('Question request timed out. Please try again.');
+      } else {
+        setError('Unable to get answer from the explanation service. Please try again later.');
+      }
+      
+      setApiAvailable(false);
     } finally {
       setLoading(false);
     }
@@ -165,13 +259,13 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
     
     switch (riskLevel.toLowerCase()) {
       case 'high':
-        return `Your symptom pattern analysis shows a ${probability}% risk score, which indicates a higher likelihood that your symptoms may be related to endometriosis. This means your combination of symptoms - particularly pain patterns, menstrual irregularities, and other factors - creates a pattern that's often seen in endometriosis cases. It's important to schedule an appointment with a gynecologist as soon as possible to discuss your symptoms and explore diagnostic options. Remember, this is a screening tool to help guide your healthcare decisions, not a definitive diagnosis.`;
+        return `Your symptom pattern analysis shows a ${probability}% risk score, which indicates a higher likelihood that your symptoms may be related to endometriosis. This means your combination of symptoms - particularly pain patterns, menstrual irregularities, and other factors - creates a pattern that's often seen in endometriosis cases.\n\nIt's important to schedule an appointment with a gynecologist as soon as possible to discuss your symptoms and explore diagnostic options. Remember, this is a screening tool to help guide your healthcare decisions, not a definitive diagnosis.\n\nMany effective treatments are available, and early intervention often leads to better outcomes. You're taking an important step by tracking your symptoms and seeking information.`;
       
       case 'moderate':
-        return `Your analysis shows a ${probability}% risk score, indicating moderate concern. Some of your symptoms align with patterns seen in endometriosis, but the picture isn't entirely clear. This suggests you should schedule a consultation with a gynecologist to discuss your symptoms and explore potential causes. Continue tracking your symptoms to identify patterns that can help your healthcare provider make the best recommendations for you.`;
+        return `Your analysis shows a ${probability}% risk score, indicating moderate concern. Some of your symptoms align with patterns seen in endometriosis, but the picture isn't entirely clear.\n\nThis suggests you should schedule a consultation with a gynecologist to discuss your symptoms and explore potential causes. Continue tracking your symptoms to identify patterns that can help your healthcare provider make the best recommendations for you.\n\nWhether or not you have endometriosis, your symptoms deserve attention and proper medical evaluation.`;
       
       case 'low':
-        return `Your analysis shows a ${probability}% risk score, which is considered lower risk. Your current symptoms don't strongly match typical endometriosis patterns, but every person's experience is unique. Continue monitoring your symptoms and maintain regular gynecological check-ups. If symptoms worsen or new symptoms develop, don't hesitate to consult a healthcare provider.`;
+        return `Your analysis shows a ${probability}% risk score, which is considered lower risk. Your current symptoms don't strongly match typical endometriosis patterns, but every person's experience is unique.\n\nContinue monitoring your symptoms and maintain regular gynecological check-ups. If symptoms worsen or new symptoms develop, don't hesitate to consult a healthcare provider.\n\nTrust your body and don't hesitate to advocate for your health.`;
       
       default:
         return `Based on your symptom analysis, you have a ${probability}% risk score. Please consult with a healthcare professional to discuss your symptoms and determine the best course of action for your specific situation.`;
@@ -249,9 +343,23 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
               <h2 className="text-xl font-semibold text-gray-900">
                 Detailed Health Insights
               </h2>
-              <p className="text-sm text-gray-600">
-                Personalized explanation of your analysis results
-              </p>
+              <div className="flex items-center space-x-2">
+                <p className="text-sm text-gray-600">
+                  Personalized explanation of your analysis results
+                </p>
+                {apiAvailable !== null && (
+                  <div className="flex items-center space-x-1">
+                    {apiAvailable ? (
+                      <Wifi className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <WifiOff className="h-3 w-3 text-red-600" />
+                    )}
+                    <span className={`text-xs ${apiAvailable ? 'text-green-600' : 'text-red-600'}`}>
+                      {apiAvailable ? 'AI Connected' : 'AI Offline'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -280,6 +388,22 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
             <p className="text-sm">{predictionResult.message}</p>
           </div>
 
+          {/* API Status */}
+          {apiAvailable === false && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <WifiOff className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <p className="text-yellow-800 font-medium">AI Explanation Service Offline</p>
+                  <p className="text-yellow-700 text-sm">
+                    The advanced AI explanation service is not available. Make sure the RAG API is running on port 8001.
+                    Using built-in explanations instead.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Get Explanation Section */}
           {!explanation && !loading && (
             <div className="text-center py-8">
@@ -296,7 +420,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 className="btn-primary"
               >
                 <MessageCircle className="h-4 w-4 mr-2" />
-                Get Detailed Explanation
+                Generate Detailed Explanation
               </button>
             </div>
           )}
@@ -305,7 +429,12 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
           {loading && (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Generating your personalized explanation...</p>
+              <p className="text-gray-600">
+                {apiAvailable === false 
+                  ? 'Generating explanation using built-in knowledge...' 
+                  : 'Generating your personalized AI explanation...'
+                }
+              </p>
             </div>
           )}
 
@@ -314,7 +443,14 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="h-5 w-5 text-red-600" />
-                <p className="text-red-800">{error}</p>
+                <div>
+                  <p className="text-red-800 font-medium">Service Issue</p>
+                  <p className="text-red-700 text-sm">{error}</p>
+                  <p className="text-red-600 text-xs mt-1">
+                    To enable AI explanations, make sure the RAG API server is running: 
+                    <code className="bg-red-100 px-1 rounded">python rag-system/rag_api.py</code>
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -322,6 +458,23 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
           {/* Explanation Results */}
           {explanation && (
             <div className="space-y-6">
+              {/* Service Status Indicator */}
+              <div className={`rounded-lg border p-3 ${apiAvailable ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="flex items-center space-x-2">
+                  {apiAvailable ? (
+                    <Wifi className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-gray-600" />
+                  )}
+                  <span className={`text-sm font-medium ${apiAvailable ? 'text-green-800' : 'text-gray-800'}`}>
+                    {apiAvailable ? 'AI-Powered Explanation' : 'Built-in Explanation'}
+                  </span>
+                  <span className={`text-xs ${apiAvailable ? 'text-green-600' : 'text-gray-600'}`}>
+                    {apiAvailable ? 'Generated using advanced AI' : 'Using medical knowledge base'}
+                  </span>
+                </div>
+              </div>
+
               {/* Detailed Explanation */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
                 <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
@@ -329,9 +482,9 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                   Your Personalized Explanation
                 </h3>
                 <div className="prose prose-blue max-w-none">
-                  <p className="text-blue-800 leading-relaxed whitespace-pre-line">
+                  <div className="text-blue-800 leading-relaxed whitespace-pre-line">
                     {explanation.explanation}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -368,49 +521,66 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 </div>
               </div>
 
-              {/* Ask Questions Section */}
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-                <h4 className="font-medium text-purple-900 mb-3 flex items-center">
-                  <HelpCircle className="h-4 w-4 mr-2" />
-                  Have More Questions?
-                </h4>
-                
-                {/* Common Questions */}
-                <div className="mb-4">
-                  <p className="text-sm text-purple-700 mb-2">Quick questions:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {commonQuestions.map((question, index) => (
-                      <button
-                        key={index}
-                        onClick={() => askQuestion(question)}
-                        disabled={loading}
-                        className="text-xs bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full transition-colors disabled:opacity-50"
-                      >
-                        {question}
-                      </button>
-                    ))}
+              {/* Ask Questions Section - Only show if API is available */}
+              {apiAvailable && (
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+                  <h4 className="font-medium text-purple-900 mb-3 flex items-center">
+                    <HelpCircle className="h-4 w-4 mr-2" />
+                    Ask Follow-up Questions
+                  </h4>
+                  
+                  {/* Common Questions */}
+                  <div className="mb-4">
+                    <p className="text-sm text-purple-700 mb-2">Quick questions:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {commonQuestions.map((question, index) => (
+                        <button
+                          key={index}
+                          onClick={() => askQuestion(question)}
+                          disabled={loading}
+                          className="text-xs bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full transition-colors disabled:opacity-50"
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom Question */}
+                  <div className="flex space-x-3">
+                    <input
+                      type="text"
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Ask your own question..."
+                      className="flex-1 input-field text-sm"
+                      onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
+                    />
+                    <button
+                      onClick={handleAskQuestion}
+                      disabled={!userQuery.trim() || loading}
+                      className="btn-primary disabled:opacity-50 text-sm px-4 py-2"
+                    >
+                      Ask
+                    </button>
                   </div>
                 </div>
+              )}
 
-                {/* Custom Question */}
-                <div className="flex space-x-3">
-                  <input
-                    type="text"
-                    value={userQuery}
-                    onChange={(e) => setUserQuery(e.target.value)}
-                    placeholder="Ask your own question..."
-                    className="flex-1 input-field text-sm"
-                    onKeyPress={(e) => e.key === 'Enter' && handleAskQuestion()}
-                  />
-                  <button
-                    onClick={handleAskQuestion}
-                    disabled={!userQuery.trim() || loading}
-                    className="btn-primary disabled:opacity-50 text-sm px-4 py-2"
-                  >
-                    Ask
-                  </button>
+              {/* Offline Questions Notice */}
+              {apiAvailable === false && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <WifiOff className="h-4 w-4 text-gray-600" />
+                    <div>
+                      <p className="text-gray-800 font-medium">Interactive Q&A Unavailable</p>
+                      <p className="text-gray-600 text-sm">
+                        Start the RAG API server to enable interactive questions and AI-powered explanations.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
