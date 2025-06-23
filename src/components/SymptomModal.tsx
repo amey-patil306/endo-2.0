@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SymptomEntry } from '../types';
-import { X, Save } from 'lucide-react';
+import { X, Save, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import ToggleSwitch from './ToggleSwitch';
+import toast from 'react-hot-toast';
 
 interface SymptomModalProps {
   date: string;
@@ -98,6 +99,9 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
     notes: '',
   });
 
+  const [saving, setSaving] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
+
   useEffect(() => {
     if (existingEntry) {
       setFormData(existingEntry);
@@ -112,16 +116,31 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
     setFormData(prev => ({ ...prev, notes: e.target.value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    setConnectionError(false);
     
-    const entry: SymptomEntry = {
-      ...formData as SymptomEntry,
-      date,
-      timestamp: Date.now(),
-    };
+    try {
+      const entry: SymptomEntry = {
+        ...formData as SymptomEntry,
+        date,
+        timestamp: Date.now(),
+      };
 
-    onSave(entry);
+      await onSave(entry);
+    } catch (error: any) {
+      console.error('Save error:', error);
+      setConnectionError(true);
+      
+      if (error.message.includes('blocked') || error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+        toast.error('Connection blocked by ad blocker. Please disable ad blockers for this site.');
+      } else {
+        toast.error('Failed to save entry. Please try again.');
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -139,6 +158,29 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
             <X className="h-6 w-6" />
           </button>
         </div>
+
+        {/* Connection Error Warning */}
+        {connectionError && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4">
+            <div className="flex items-center">
+              <WifiOff className="h-5 w-5 text-red-400 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Connection Issue</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>Unable to save data. This might be caused by:</p>
+                  <ul className="list-disc list-inside mt-1">
+                    <li>Ad blocker blocking Firebase requests</li>
+                    <li>Network connectivity issues</li>
+                    <li>Browser privacy settings</li>
+                  </ul>
+                  <p className="mt-2 font-medium">
+                    Try: Disable ad blockers for this site or check your network connection.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
@@ -186,16 +228,27 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
             type="button"
             onClick={onClose}
             className="btn-secondary"
+            disabled={saving}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            className="btn-primary flex items-center"
+            disabled={saving}
+            className="btn-primary flex items-center disabled:opacity-50"
           >
-            <Save className="h-4 w-4 mr-2" />
-            {existingEntry ? 'Update Entry' : 'Save Entry'}
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {existingEntry ? 'Update Entry' : 'Save Entry'}
+              </>
+            )}
           </button>
         </div>
       </div>
