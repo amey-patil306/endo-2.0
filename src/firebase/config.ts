@@ -18,15 +18,15 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with additional settings
+// Initialize Firestore
 export const db = getFirestore(app);
 
-// Add these settings to help with connectivity issues
+// Enable offline persistence and network recovery
 if (typeof window !== 'undefined') {
-  // Enable offline persistence
-  import('firebase/firestore').then(({ enableNetwork, disableNetwork }) => {
-    // This helps with connectivity issues
-    enableNetwork(db).catch(console.error);
+  import('firebase/firestore').then(({ enableNetwork }) => {
+    enableNetwork(db).catch((error) => {
+      console.warn('Failed to enable Firestore network:', error);
+    });
   });
 }
 

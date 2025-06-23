@@ -10,26 +10,48 @@ import {
   enableNetwork,
   disableNetwork
 } from 'firebase/firestore';
-import { db } from './config';
+import { auth, db } from './config';
 import { SymptomEntry, UserProgress } from '../types';
 
 // Enhanced error handling for network issues
 const handleFirestoreError = (error: any, operation: string) => {
   console.error(`Firestore ${operation} error:`, error);
   
+  if (error.code === 'permission-denied') {
+    // Check if user is authenticated
+    if (!auth.currentUser) {
+      throw new Error('You must be logged in to perform this action. Please sign in and try again.');
+    }
+    throw new Error('Permission denied. Please make sure you are properly authenticated and try again.');
+  }
+  
   if (error.code === 'unavailable' || error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
     throw new Error('Connection blocked. Please disable ad blockers for this site or check your network connection.');
   }
   
-  if (error.code === 'permission-denied') {
-    throw new Error('Permission denied. Please make sure you are logged in.');
+  if (error.code === 'unauthenticated') {
+    throw new Error('Authentication expired. Please sign in again.');
   }
   
   throw new Error(`Failed to ${operation}. Please try again.`);
 };
 
-// Save symptom entry with retry logic
+// Ensure user is authenticated before operations
+const ensureAuthenticated = () => {
+  if (!auth.currentUser) {
+    throw new Error('User not authenticated. Please sign in first.');
+  }
+  return auth.currentUser.uid;
+};
+
+// Save symptom entry with retry logic and authentication check
 export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
+  // Verify user is authenticated and matches the userId
+  const currentUserId = ensureAuthenticated();
+  if (currentUserId !== userId) {
+    throw new Error('User ID mismatch. Please sign in again.');
+  }
+
   const maxRetries = 3;
   let lastError;
 
@@ -41,6 +63,11 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
     } catch (error: any) {
       lastError = error;
       console.warn(`Attempt ${attempt} failed:`, error);
+      
+      // Don't retry permission errors
+      if (error.code === 'permission-denied' || error.code === 'unauthenticated') {
+        break;
+      }
       
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff)
@@ -55,6 +82,12 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
 // Get symptom entry for a specific date
 export const getSymptomEntry = async (userId: string, date: string): Promise<SymptomEntry | null> => {
   try {
+    // Verify user is authenticated
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
     const docRef = doc(db, 'users', userId, 'logs', date);
     const docSnap = await getDoc(docRef);
     
@@ -71,6 +104,12 @@ export const getSymptomEntry = async (userId: string, date: string): Promise<Sym
 // Get all symptom entries for a user
 export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry[]> => {
   try {
+    // Verify user is authenticated
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
     const q = query(collection(db, 'users', userId, 'logs'));
     const querySnapshot = await getDocs(q);
     
@@ -86,8 +125,14 @@ export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry
   }
 };
 
-// Update user progress with retry logic
+// Update user progress with retry logic and authentication check
 export const updateUserProgress = async (userId: string, progress: UserProgress): Promise<void> => {
+  // Verify user is authenticated
+  const currentUserId = ensureAuthenticated();
+  if (currentUserId !== userId) {
+    throw new Error('User ID mismatch. Please sign in again.');
+  }
+
   const maxRetries = 3;
   let lastError;
 
@@ -99,6 +144,11 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
     } catch (error: any) {
       lastError = error;
       console.warn(`Progress update attempt ${attempt} failed:`, error);
+      
+      // Don't retry permission errors
+      if (error.code === 'permission-denied' || error.code === 'unauthenticated') {
+        break;
+      }
       
       if (attempt < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
@@ -112,6 +162,12 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
 // Get user progress
 export const getUserProgress = async (userId: string): Promise<UserProgress | null> => {
   try {
+    // Verify user is authenticated
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
     const docRef = doc(db, 'users', userId, 'metadata', 'progress');
     const docSnap = await getDoc(docRef);
     
