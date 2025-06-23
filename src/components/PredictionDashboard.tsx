@@ -4,6 +4,7 @@ import { SymptomEntry } from '../types';
 import { getSymptomEntriesForPrediction, getAllSymptomEntries, getSymptomEntriesForMonth } from '../lib/database';
 import { dummyPredictionResults } from '../utils/dummyData';
 import PredictionExplanation from './PredictionExplanation';
+import { getMLApiUrl } from '../config/api';
 import { Brain, TrendingUp, Calendar, AlertCircle, CheckCircle, Database, Clock, BarChart3, PieChart, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -326,7 +327,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
         const transformedData = transformSymptomData(limitedEntries);
         console.log('🔄 Transformed data for API:', transformedData);
         
-        const response = await fetch('http://localhost:8000/predict', {
+        const response = await fetch(`${getMLApiUrl()}/predict`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

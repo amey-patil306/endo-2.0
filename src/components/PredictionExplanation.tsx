@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MessageCircle, Heart, AlertCircle, CheckCircle, Clock, Sparkles, HelpCircle, Wifi, WifiOff } from 'lucide-react';
+import { getRAGApiUrl } from '../config/api';
 
 interface PredictionResult {
   prediction: number;
@@ -79,7 +80,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
   const checkApiAvailability = async (): Promise<boolean> => {
     try {
       console.log('🔍 Checking RAG API availability...');
-      const response = await fetch('http://localhost:8001/health', {
+      const response = await fetch(`${getRAGApiUrl()}/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +121,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       console.log('📡 Calling RAG API for explanation...');
       
       // Try to call the explanation API
-      const response = await fetch('http://localhost:8001/explain', {
+      const response = await fetch(`${getRAGApiUrl()}/explain`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +161,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
       if (err.name === 'AbortError' || err.message.includes('timeout')) {
         setError('Request timed out. The explanation service is taking too long to respond.');
       } else if (err.message.includes('fetch')) {
-        setError('Cannot connect to explanation service. Please make sure the RAG API is running on port 8001.');
+        setError('Cannot connect to explanation service. Please make sure the RAG API is running.');
       } else {
         setError(`Explanation service error: ${err.message}`);
       }
@@ -207,7 +208,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
 
       console.log('📡 Calling RAG API for question...');
 
-      const response = await fetch('http://localhost:8001/ask', {
+      const response = await fetch(`${getRAGApiUrl()}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -446,7 +447,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 <div>
                   <p className="text-yellow-800 font-medium">AI Explanation Service Offline</p>
                   <p className="text-yellow-700 text-sm">
-                    The advanced AI explanation service is not available. Make sure the RAG API is running on port 8001.
+                    The advanced AI explanation service is not available. Make sure the RAG API is running.
                     Using built-in explanations instead.
                   </p>
                 </div>
@@ -497,8 +498,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                   <p className="text-red-800 font-medium">Service Issue</p>
                   <p className="text-red-700 text-sm">{error}</p>
                   <p className="text-red-600 text-xs mt-1">
-                    To enable AI explanations, make sure the RAG API server is running: 
-                    <code className="bg-red-100 px-1 rounded">python rag-system/rag_api.py</code>
+                    To enable AI explanations, make sure the RAG API server is running.
                   </p>
                 </div>
               </div>
@@ -587,7 +587,7 @@ const PredictionExplanation: React.FC<PredictionExplanationProps> = ({
                 
                 <p className="text-xs text-purple-600 mt-2">
                   {apiAvailable ? 
-                    'Powered by Llama AI for accurate medical information' : 
+                    'Powered by DeepSeek AI for accurate medical information' : 
                     'Using built-in medical knowledge base'
                   }
                 </p>
