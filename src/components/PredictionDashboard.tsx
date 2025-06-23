@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import { SymptomEntry } from '../types';
 import { getSymptomEntriesForPrediction } from '../lib/database';
 import { dummyPredictionResults } from '../utils/dummyData';
@@ -122,7 +122,7 @@ const PredictionDashboard: React.FC<PredictionDashboardProps> = ({ user, complet
 
     try {
       // Get user's symptom entries from Supabase
-      const entries = await getSymptomEntriesForPrediction(user.uid);
+      const entries = await getSymptomEntriesForPrediction(user.id);
       
       if (entries.length === 0) {
         throw new Error('No symptom data found. Please log some symptoms first.');

@@ -1,6 +1,6 @@
 import { supabase, SymptomEntryDB, UserProgressDB } from './supabase';
 import { SymptomEntry, UserProgress } from '../types';
-import { auth } from '../firebase/config';
+import { getCurrentUser } from './auth';
 import { ensureTablesExist } from './supabaseSetup';
 
 // Transform frontend SymptomEntry to database format
@@ -72,11 +72,12 @@ const transformFromDBFormat = (dbEntry: SymptomEntryDB): SymptomEntry => ({
 });
 
 // Ensure user is authenticated
-const ensureAuthenticated = (): string => {
-  if (!auth.currentUser) {
+const ensureAuthenticated = async (): Promise<string> => {
+  const user = await getCurrentUser();
+  if (!user) {
     throw new Error('User not authenticated. Please sign in first.');
   }
-  return auth.currentUser.uid;
+  return user.id;
 };
 
 // Enhanced error handling for Supabase operations
@@ -123,7 +124,7 @@ const ensureTablesExistForOperation = async (operation: string): Promise<void> =
 export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
   try {
     // Verify user is authenticated
-    const currentUserId = ensureAuthenticated();
+    const currentUserId = await ensureAuthenticated();
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
@@ -160,7 +161,7 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
 // Get symptom entry for a specific date
 export const getSymptomEntry = async (userId: string, date: string): Promise<SymptomEntry | null> => {
   try {
-    const currentUserId = ensureAuthenticated();
+    const currentUserId = await ensureAuthenticated();
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
@@ -190,7 +191,7 @@ export const getSymptomEntry = async (userId: string, date: string): Promise<Sym
 // Get all symptom entries for a user
 export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry[]> => {
   try {
-    const currentUserId = ensureAuthenticated();
+    const currentUserId = await ensureAuthenticated();
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
@@ -219,7 +220,7 @@ export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry
 // Update user progress with better error handling
 export const updateUserProgress = async (userId: string, progress: UserProgress): Promise<void> => {
   try {
-    const currentUserId = ensureAuthenticated();
+    const currentUserId = await ensureAuthenticated();
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
@@ -261,7 +262,7 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
 // Get user progress
 export const getUserProgress = async (userId: string): Promise<UserProgress | null> => {
   try {
-    const currentUserId = ensureAuthenticated();
+    const currentUserId = await ensureAuthenticated();
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }

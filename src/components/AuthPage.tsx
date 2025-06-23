@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { signIn, signUp, signInWithGoogle } from '../lib/auth';
 import toast from 'react-hot-toast';
 import { Heart, Mail, Lock, User } from 'lucide-react';
 
@@ -16,14 +15,19 @@ const AuthPage: React.FC = () => {
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signIn(email, password);
         toast.success('Welcome back!');
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-        toast.success('Account created successfully!');
+        const { user } = await signUp(email, password);
+        if (user && !user.email_confirmed_at) {
+          toast.success('Please check your email to confirm your account!');
+        } else {
+          toast.success('Account created successfully!');
+        }
       }
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Auth error:', error);
+      toast.error(error.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -31,13 +35,13 @@ const AuthPage: React.FC = () => {
 
   const handleGoogleAuth = async () => {
     setLoading(true);
-    const provider = new GoogleAuthProvider();
 
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithGoogle();
       toast.success('Welcome!');
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Google auth error:', error);
+      toast.error(error.message || 'Google authentication failed');
     } finally {
       setLoading(false);
     }
@@ -55,6 +59,9 @@ const AuthPage: React.FC = () => {
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Track your symptoms and take control of your health
+          </p>
+          <p className="mt-1 text-xs text-blue-600 font-medium">
+            Powered by Supabase
           </p>
         </div>
 

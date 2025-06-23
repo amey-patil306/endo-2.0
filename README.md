@@ -1,6 +1,6 @@
 # Endometriosis Symptom Tracker
 
-A comprehensive web application for tracking endometriosis symptoms with AI-powered predictions and real-time data synchronization.
+A comprehensive web application for tracking endometriosis symptoms with AI-powered predictions and real-time data synchronization, powered entirely by Supabase.
 
 ## 🚀 Quick Setup
 
@@ -25,29 +25,20 @@ A comprehensive web application for tracking endometriosis symptoms with AI-powe
    VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
    ```
 
-4. **Run Database Migrations**:
+4. **Enable Authentication Providers**:
+   - In your Supabase dashboard, go to **Authentication > Providers**
+   - Enable **Email** provider
+   - Optionally enable **Google** provider for OAuth
+
+5. **Run Database Migrations**:
    - In your Supabase dashboard, go to **SQL Editor**
    - Run these migration files in order:
      1. `supabase/migrations/20250623202408_mute_block.sql`
      2. `supabase/migrations/20250623202420_green_tree.sql`
      3. `supabase/migrations/20250623202427_silver_shape.sql`
+     4. `supabase/migrations/20250623205204_morning_cake.sql`
 
-### 2. Firebase Configuration (for Authentication)
-
-Update `src/firebase/config.ts` with your Firebase credentials:
-
-```typescript
-const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id"
-};
-```
-
-### 3. Install and Run
+### 2. Install and Run
 
 ```bash
 npm install
@@ -77,22 +68,24 @@ This usually means your Supabase configuration is incorrect:
 - **"relation does not exist"**: Database migrations haven't been run
 - **"Invalid API key"**: Wrong anon key in `.env` file
 - **"JWT expired"**: Authentication issue, try signing out and back in
+- **"invalid input syntax for type uuid"**: Run the latest migration to fix user_id type issues
 
 ## 📊 Features
 
+- **Supabase Authentication**: Email/password and Google OAuth
 - **Real-time Symptom Tracking**: Log daily symptoms with instant sync
 - **AI Predictions**: Machine learning analysis of symptom patterns
 - **Calendar Interface**: Visual tracking with FullCalendar
 - **Progress Monitoring**: Track completion and patterns over time
 - **Demo Data**: Pre-built scenarios for testing and demonstration
-- **Secure Authentication**: Firebase Auth with Google OAuth
-- **Real-time Sync**: Supabase for instant data updates
+- **Real-time Sync**: Supabase for instant data updates across devices
+- **Row Level Security**: Secure, user-specific data access
 
 ## 🏗️ Architecture
 
 - **Frontend**: React 18 + TypeScript + Tailwind CSS
 - **Database**: Supabase (PostgreSQL with real-time features)
-- **Authentication**: Firebase Auth
+- **Authentication**: Supabase Auth (replaces Firebase Auth)
 - **Calendar**: FullCalendar
 - **Build Tool**: Vite
 
@@ -101,9 +94,8 @@ This usually means your Supabase configuration is incorrect:
 ```
 src/
 ├── components/          # React components
-├── lib/                # Database and Supabase utilities
+├── lib/                # Supabase utilities and database functions
 ├── utils/              # Helper functions and dummy data
-├── firebase/           # Firebase configuration
 └── types/              # TypeScript interfaces
 
 supabase/
@@ -114,8 +106,9 @@ supabase/
 
 - Row Level Security (RLS) enabled on all tables
 - User-specific data access only
-- Secure authentication with Firebase
+- Secure authentication with Supabase Auth
 - Environment variables for sensitive data
+- Real-time subscriptions with proper authorization
 
 ## 🚀 Deployment
 
@@ -132,9 +125,10 @@ Make sure to set environment variables in your deployment platform.
 If you encounter issues:
 
 1. Check the browser console for error messages
-2. Verify your Supabase and Firebase configurations
+2. Verify your Supabase configuration
 3. Ensure all migrations have been run
 4. Check that environment variables are set correctly
+5. Verify authentication providers are enabled in Supabase
 
 ## 🎯 Demo Features
 
@@ -143,6 +137,24 @@ Use the demo panel (bottom-right corner) to:
 - Test different risk scenarios
 - Add random symptom data
 - Clear all data for fresh start
+
+## 🔄 Migration from Firebase
+
+This version has completely replaced Firebase with Supabase:
+
+- **Authentication**: Now uses Supabase Auth instead of Firebase Auth
+- **Database**: Uses Supabase PostgreSQL instead of Firestore
+- **Real-time**: Uses Supabase real-time subscriptions
+- **Security**: Uses Supabase RLS instead of Firestore rules
+
+## 🌟 Supabase Benefits
+
+- **Real-time subscriptions**: Instant UI updates across devices
+- **PostgreSQL**: More powerful queries and data relationships
+- **Built-in auth**: No need for separate authentication service
+- **Row Level Security**: Database-level security policies
+- **Edge functions**: Serverless functions (future enhancement)
+- **Storage**: Built-in file storage (future enhancement)
 
 ---
 

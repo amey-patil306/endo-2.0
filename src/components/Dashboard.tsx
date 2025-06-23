@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import type { User } from '@supabase/supabase-js';
+import { signOut } from '../lib/auth';
 import Calendar from './Calendar';
 import ProgressBar from './ProgressBar';
 import PredictionDashboard from './PredictionDashboard';
@@ -32,7 +31,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     loadUserProgress();
     
     // Subscribe to real-time progress updates
-    const subscription = subscribeToUserProgress(user.uid, (updatedProgress) => {
+    const subscription = subscribeToUserProgress(user.id, (updatedProgress) => {
       if (updatedProgress) {
         setProgress(updatedProgress);
         setHasData(updatedProgress.completedDays > 0);
@@ -42,12 +41,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [user.uid]);
+  }, [user.id]);
 
   const loadUserProgress = async () => {
     try {
       setLoading(true);
-      const userProgress = await getUserProgress(user.uid);
+      const userProgress = await getUserProgress(user.id);
       if (userProgress) {
         setProgress(userProgress);
         setHasData(userProgress.completedDays > 0);
@@ -68,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await signOut();
       toast.success('Signed out successfully');
     } catch (error) {
       toast.error('Error signing out');
@@ -86,7 +85,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const handleLoadMayDemo = async () => {
-    const dummyManager = getSupabaseDummyManager(user.uid);
+    const dummyManager = getSupabaseDummyManager(user.id);
     await dummyManager.loadMayScenario('moderateRisk');
     handleDataLoaded();
   };
@@ -239,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 Daily Symptom Tracking
               </h2>
               <Calendar 
-                userId={user.uid} 
+                userId={user.id} 
                 progress={progress}
                 onProgressUpdate={updateProgress}
               />

@@ -12,7 +12,6 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "firebase": "^10.7.1",
     "@supabase/supabase-js": "^2.39.0",
     "@fullcalendar/react": "^6.1.10",
     "@fullcalendar/daygrid": "^6.1.10",

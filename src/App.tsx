@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { User } from 'firebase/auth';
-import { auth } from './firebase/config';
-import { onAuthStateChanged } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
+import { onAuthStateChange } from './lib/auth';
 import { initializeSupabaseSchema, testSupabaseConnection } from './lib/supabaseSetup';
 import AuthPage from './components/AuthPage';
 import Dashboard from './components/Dashboard';
@@ -25,7 +24,8 @@ function App() {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // Set up auth state listener
+    const { data: { subscription } } = onAuthStateChange(async (user) => {
       setUser(user);
       
       if (user) {
@@ -36,7 +36,9 @@ function App() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const initializeSupabase = async () => {

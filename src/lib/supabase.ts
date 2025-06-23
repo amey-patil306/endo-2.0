@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User, Session } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -22,7 +22,8 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false
+      detectSessionInUrl: true,
+      flowType: 'pkce'
     },
     realtime: {
       params: {
@@ -115,3 +116,15 @@ export interface UserProgressDB {
   created_at?: string;
   updated_at?: string;
 }
+
+// Auth helper functions
+export const getCurrentUser = (): User | null => {
+  return supabase.auth.getUser().then(({ data }) => data.user).catch(() => null);
+};
+
+export const getCurrentSession = (): Promise<Session | null> => {
+  return supabase.auth.getSession().then(({ data }) => data.session).catch(() => null);
+};
+
+// Export types for convenience
+export type { User, Session };
