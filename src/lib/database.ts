@@ -1,6 +1,7 @@
 import { supabase, SymptomEntryDB, UserProgressDB } from './supabase';
 import { SymptomEntry, UserProgress } from '../types';
 import { auth } from '../firebase/config';
+import { ensureTablesExist } from './supabaseSetup';
 
 // Transform frontend SymptomEntry to database format
 const transformToDBFormat = (entry: SymptomEntry, userId: string): SymptomEntryDB => ({
@@ -87,7 +88,7 @@ const handleSupabaseError = (error: any, operation: string) => {
   }
   
   if (error.code === '42P01') {
-    throw new Error('Database table not found. Please ensure the database is properly set up.');
+    throw new Error(`Database table not found. Please ensure the database is properly set up. Missing table for ${operation}.`);
   }
   
   if (error.code === '23505') {
@@ -105,6 +106,19 @@ const handleSupabaseError = (error: any, operation: string) => {
   throw new Error(`Failed to ${operation}: ${error.message || 'Unknown error'}`);
 };
 
+// Ensure tables exist before operations
+const ensureTablesExistForOperation = async (operation: string): Promise<void> => {
+  try {
+    const result = await ensureTablesExist();
+    if (!result.success) {
+      throw new Error(`Cannot ${operation}: Required database tables are missing. Please check your Supabase setup.`);
+    }
+  } catch (error) {
+    console.error(`Error ensuring tables exist for ${operation}:`, error);
+    throw new Error(`Database setup error: ${error}`);
+  }
+};
+
 // Save symptom entry with better error handling
 export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
   try {
@@ -113,6 +127,9 @@ export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Pro
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
+
+    // Ensure tables exist
+    await ensureTablesExistForOperation('save symptom entry');
 
     console.log('Saving symptom entry:', { userId, date: entry.date });
 
@@ -148,6 +165,9 @@ export const getSymptomEntry = async (userId: string, date: string): Promise<Sym
       throw new Error('User ID mismatch. Please sign in again.');
     }
 
+    // Ensure tables exist
+    await ensureTablesExistForOperation('get symptom entry');
+
     const { data, error } = await supabase
       .from('symptom_entries')
       .select('*')
@@ -175,6 +195,9 @@ export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry
       throw new Error('User ID mismatch. Please sign in again.');
     }
 
+    // Ensure tables exist
+    await ensureTablesExistForOperation('get symptom entries');
+
     const { data, error } = await supabase
       .from('symptom_entries')
       .select('*')
@@ -200,6 +223,9 @@ export const updateUserProgress = async (userId: string, progress: UserProgress)
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
+
+    // Ensure tables exist
+    await ensureTablesExistForOperation('update user progress');
 
     console.log('Updating user progress:', { userId, progress });
 
@@ -239,6 +265,9 @@ export const getUserProgress = async (userId: string): Promise<UserProgress | nu
     if (currentUserId !== userId) {
       throw new Error('User ID mismatch. Please sign in again.');
     }
+
+    // Ensure tables exist
+    await ensureTablesExistForOperation('get user progress');
 
     const { data, error } = await supabase
       .from('user_progress')
@@ -363,23 +392,45 @@ export const subscribeToUserProgress = (userId: string, callback: (progress: Use
     .subscribe();
 };
 
-// Test Supabase connection
-export const testSupabaseConnection = async (): Promise<boolean> => {
+// Test Supabase connection and table existence
+export const testSupabaseConnection = async (): Promise<{
+  connected: boolean;
+  tablesExist: boolean;
+  errors: string[];
+}> => {
   try {
-    const { data, error } = await supabase
+    console.log('🔍 Testing Supabase connection and tables...');
+    
+    // Test basic connection
+    const { data: connectionTest, error: connectionError } = await supabase
       .from('symptom_entries')
       .select('count')
       .limit(1);
     
-    if (error) {
-      console.error('Supabase connection test failed:', error);
-      return false;
+    const connected = !connectionError;
+    
+    // Test table existence
+    const tableResult = await ensureTablesExist();
+    
+    const result = {
+      connected,
+      tablesExist: tableResult.success,
+      errors: tableResult.errors
+    };
+    
+    if (connected && tableResult.success) {
+      console.log('✅ Supabase connection and tables verified successfully');
+    } else {
+      console.warn('⚠️ Supabase issues detected:', result);
     }
     
-    console.log('Supabase connection test successful');
-    return true;
+    return result;
   } catch (error) {
-    console.error('Supabase connection test error:', error);
-    return false;
+    console.error('❌ Supabase connection test error:', error);
+    return {
+      connected: false,
+      tablesExist: false,
+      errors: [`Connection test failed: ${error}`]
+    };
   }
 };
