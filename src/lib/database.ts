@@ -78,119 +78,181 @@ const ensureAuthenticated = (): string => {
   return auth.currentUser.uid;
 };
 
-// Save symptom entry
-export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
-  const currentUserId = ensureAuthenticated();
-  if (currentUserId !== userId) {
-    throw new Error('User ID mismatch. Please sign in again.');
+// Enhanced error handling for Supabase operations
+const handleSupabaseError = (error: any, operation: string) => {
+  console.error(`Supabase ${operation} error:`, error);
+  
+  if (error.code === '42501') {
+    throw new Error('Permission denied. Please make sure you are properly authenticated.');
   }
+  
+  if (error.code === '42P01') {
+    throw new Error('Database table not found. Please ensure the database is properly set up.');
+  }
+  
+  if (error.code === '23505') {
+    throw new Error('Data already exists for this date. Use update instead.');
+  }
+  
+  if (error.message?.includes('JWT')) {
+    throw new Error('Authentication token expired. Please sign in again.');
+  }
+  
+  if (error.message?.includes('network') || error.message?.includes('fetch')) {
+    throw new Error('Network error. Please check your internet connection.');
+  }
+  
+  throw new Error(`Failed to ${operation}: ${error.message || 'Unknown error'}`);
+};
 
-  const dbEntry = transformToDBFormat(entry, userId);
+// Save symptom entry with better error handling
+export const saveSymptomEntry = async (userId: string, entry: SymptomEntry): Promise<void> => {
+  try {
+    // Verify user is authenticated
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
 
-  const { error } = await supabase
-    .from('symptom_entries')
-    .upsert(dbEntry, { 
-      onConflict: 'user_id,date',
-      ignoreDuplicates: false 
-    });
+    console.log('Saving symptom entry:', { userId, date: entry.date });
 
-  if (error) {
-    console.error('Supabase save error:', error);
-    throw new Error(`Failed to save entry: ${error.message}`);
+    const dbEntry = transformToDBFormat(entry, userId);
+
+    // First try to insert, if conflict then update
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .upsert(dbEntry, { 
+        onConflict: 'user_id,date',
+        ignoreDuplicates: false 
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase upsert error:', error);
+      handleSupabaseError(error, 'save entry');
+    }
+
+    console.log('Successfully saved symptom entry:', data);
+  } catch (error: any) {
+    console.error('Save symptom entry error:', error);
+    throw error;
   }
 };
 
 // Get symptom entry for a specific date
 export const getSymptomEntry = async (userId: string, date: string): Promise<SymptomEntry | null> => {
-  const currentUserId = ensureAuthenticated();
-  if (currentUserId !== userId) {
-    throw new Error('User ID mismatch. Please sign in again.');
-  }
-
-  const { data, error } = await supabase
-    .from('symptom_entries')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('date', date)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // No data found
-      return null;
+  try {
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
     }
-    console.error('Supabase get error:', error);
-    throw new Error(`Failed to get entry: ${error.message}`);
-  }
 
-  return data ? transformFromDBFormat(data) : null;
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase get error:', error);
+      handleSupabaseError(error, 'get entry');
+    }
+
+    return data ? transformFromDBFormat(data) : null;
+  } catch (error: any) {
+    console.error('Get symptom entry error:', error);
+    throw error;
+  }
 };
 
 // Get all symptom entries for a user
 export const getAllSymptomEntries = async (userId: string): Promise<SymptomEntry[]> => {
-  const currentUserId = ensureAuthenticated();
-  if (currentUserId !== userId) {
-    throw new Error('User ID mismatch. Please sign in again.');
+  try {
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
+
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error('Supabase get all error:', error);
+      handleSupabaseError(error, 'get entries');
+    }
+
+    return data ? data.map(transformFromDBFormat) : [];
+  } catch (error: any) {
+    console.error('Get all symptom entries error:', error);
+    throw error;
   }
-
-  const { data, error } = await supabase
-    .from('symptom_entries')
-    .select('*')
-    .eq('user_id', userId)
-    .order('date', { ascending: true });
-
-  if (error) {
-    console.error('Supabase get all error:', error);
-    throw new Error(`Failed to get entries: ${error.message}`);
-  }
-
-  return data ? data.map(transformFromDBFormat) : [];
 };
 
-// Update user progress
+// Update user progress with better error handling
 export const updateUserProgress = async (userId: string, progress: UserProgress): Promise<void> => {
-  const currentUserId = ensureAuthenticated();
-  if (currentUserId !== userId) {
-    throw new Error('User ID mismatch. Please sign in again.');
-  }
+  try {
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
 
-  const dbProgress: UserProgressDB = {
-    user_id: userId,
-    completed_days: progress.completedDays,
-    total_days: progress.totalDays,
-    start_date: progress.startDate,
-    completed_dates: progress.completedDates,
-  };
+    console.log('Updating user progress:', { userId, progress });
 
-  const { error } = await supabase
-    .from('user_progress')
-    .upsert(dbProgress, { 
-      onConflict: 'user_id',
-      ignoreDuplicates: false 
-    });
+    const dbProgress: UserProgressDB = {
+      user_id: userId,
+      completed_days: progress.completedDays,
+      total_days: progress.totalDays,
+      start_date: progress.startDate,
+      completed_dates: progress.completedDates,
+    };
 
-  if (error) {
-    console.error('Supabase progress update error:', error);
-    throw new Error(`Failed to update progress: ${error.message}`);
+    const { data, error } = await supabase
+      .from('user_progress')
+      .upsert(dbProgress, { 
+        onConflict: 'user_id',
+        ignoreDuplicates: false 
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase progress update error:', error);
+      handleSupabaseError(error, 'update progress');
+    }
+
+    console.log('Successfully updated user progress:', data);
+  } catch (error: any) {
+    console.error('Update user progress error:', error);
+    throw error;
   }
 };
 
 // Get user progress
 export const getUserProgress = async (userId: string): Promise<UserProgress | null> => {
-  const currentUserId = ensureAuthenticated();
-  if (currentUserId !== userId) {
-    throw new Error('User ID mismatch. Please sign in again.');
-  }
+  try {
+    const currentUserId = ensureAuthenticated();
+    if (currentUserId !== userId) {
+      throw new Error('User ID mismatch. Please sign in again.');
+    }
 
-  const { data, error } = await supabase
-    .from('user_progress')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+    const { data, error } = await supabase
+      .from('user_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // No data found, create default progress
+    if (error) {
+      console.error('Supabase get progress error:', error);
+      handleSupabaseError(error, 'get progress');
+    }
+
+    if (!data) {
+      // Create default progress if none exists
       const defaultProgress: UserProgress = {
         completedDays: 0,
         totalDays: 20,
@@ -201,16 +263,17 @@ export const getUserProgress = async (userId: string): Promise<UserProgress | nu
       await updateUserProgress(userId, defaultProgress);
       return defaultProgress;
     }
-    console.error('Supabase get progress error:', error);
-    return null;
-  }
 
-  return {
-    completedDays: data.completed_days,
-    totalDays: data.total_days,
-    startDate: data.start_date,
-    completedDates: data.completed_dates
-  };
+    return {
+      completedDays: data.completed_days,
+      totalDays: data.total_days,
+      startDate: data.start_date,
+      completedDates: data.completed_dates
+    };
+  } catch (error: any) {
+    console.error('Get user progress error:', error);
+    throw error;
+  }
 };
 
 // Get symptom entries for ML prediction
@@ -263,9 +326,13 @@ export const subscribeToSymptomEntries = (userId: string, callback: (entries: Sy
         filter: `user_id=eq.${userId}`,
       },
       async () => {
-        // Fetch updated data when changes occur
-        const entries = await getAllSymptomEntries(userId);
-        callback(entries);
+        try {
+          // Fetch updated data when changes occur
+          const entries = await getAllSymptomEntries(userId);
+          callback(entries);
+        } catch (error) {
+          console.error('Error fetching updated entries:', error);
+        }
       }
     )
     .subscribe();
@@ -284,10 +351,35 @@ export const subscribeToUserProgress = (userId: string, callback: (progress: Use
         filter: `user_id=eq.${userId}`,
       },
       async () => {
-        // Fetch updated data when changes occur
-        const progress = await getUserProgress(userId);
-        callback(progress);
+        try {
+          // Fetch updated data when changes occur
+          const progress = await getUserProgress(userId);
+          callback(progress);
+        } catch (error) {
+          console.error('Error fetching updated progress:', error);
+        }
       }
     )
     .subscribe();
+};
+
+// Test Supabase connection
+export const testSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('symptom_entries')
+      .select('count')
+      .limit(1);
+    
+    if (error) {
+      console.error('Supabase connection test failed:', error);
+      return false;
+    }
+    
+    console.log('Supabase connection test successful');
+    return true;
+  } catch (error) {
+    console.error('Supabase connection test error:', error);
+    return false;
+  }
 };

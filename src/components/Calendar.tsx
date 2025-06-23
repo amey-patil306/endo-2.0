@@ -74,6 +74,7 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
       const entry = await getSymptomEntry(userId, clickedDate);
       setExistingEntry(entry);
     } catch (error) {
+      console.error('Error getting existing entry:', error);
       setExistingEntry(null);
     }
     
@@ -82,6 +83,9 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
 
   const handleSaveEntry = async (entry: SymptomEntry) => {
     try {
+      console.log('Saving entry:', entry);
+      
+      // Save the symptom entry
       await saveSymptomEntry(userId, entry);
       
       // Update progress
@@ -102,9 +106,19 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
       setIsModalOpen(false);
       setSelectedDate(null);
       setExistingEntry(null);
-    } catch (error) {
-      toast.error('Error saving entry');
-      console.error('Error:', error);
+    } catch (error: any) {
+      console.error('Error saving entry:', error);
+      
+      // Provide specific error messages
+      if (error.message.includes('not authenticated')) {
+        toast.error('Please sign in again to save your data');
+      } else if (error.message.includes('network')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else if (error.message.includes('database')) {
+        toast.error('Database error. Please contact support if this persists.');
+      } else {
+        toast.error(`Failed to save entry: ${error.message}`);
+      }
     }
   };
 
@@ -119,7 +133,7 @@ const Calendar: React.FC<CalendarProps> = ({ userId, progress, onProgressUpdate 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
           <strong>Instructions:</strong> Click on any date (except future dates) to log your daily symptoms. 
-          Completed days will be marked with a green checkmark. Data is automatically synced in real-time.
+          Completed days will be marked with a green checkmark. Data is automatically synced in real-time with Supabase.
         </p>
       </div>
 

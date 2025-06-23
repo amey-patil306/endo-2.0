@@ -3,17 +3,42 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
 
+if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co') {
+  console.error('VITE_SUPABASE_URL is not set in environment variables');
+}
+
+if (!supabaseAnonKey || supabaseAnonKey === 'your-anon-key') {
+  console.error('VITE_SUPABASE_ANON_KEY is not set in environment variables');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false
   },
   realtime: {
     params: {
       eventsPerSecond: 10,
     },
   },
+  global: {
+    headers: {
+      'X-Client-Info': 'endometriosis-tracker'
+    }
+  }
 });
+
+// Test connection on initialization
+supabase.from('symptom_entries').select('count').limit(1).then(
+  ({ data, error }) => {
+    if (error) {
+      console.error('Supabase connection failed:', error);
+    } else {
+      console.log('Supabase connected successfully');
+    }
+  }
+);
 
 // Database types
 export interface SymptomEntryDB {
