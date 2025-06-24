@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import { getSupabaseDummyManager } from '../utils/supabaseDummyManager';
 import { mayScenarios } from '../utils/mayDummyData';
 import { Database, Calendar, Users, Trash2, Plus, RefreshCw, AlertTriangle, Zap } from 'lucide-react';
@@ -12,7 +12,7 @@ interface SupabaseDemoPanelProps {
 const SupabaseDemoPanel: React.FC<SupabaseDemoPanelProps> = ({ user, onDataLoaded }) => {
   const [loading, setLoading] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
-  const [dummyManager] = useState(() => getSupabaseDummyManager(user.uid));
+  const [dummyManager] = useState(() => getSupabaseDummyManager(user.id));
 
   const handleLoadMayScenario = async (scenario: 'highRisk' | 'moderateRisk' | 'lowRisk') => {
     setLoading(true);

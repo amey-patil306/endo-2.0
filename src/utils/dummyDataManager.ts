@@ -1,4 +1,4 @@
-import { saveSymptomEntry, updateUserProgress, getUserProgress } from '../firebase/firestore';
+import { saveSymptomEntry, updateUserProgress, getUserProgress } from '../lib/database';
 import { generateDummySymptomEntries, generateDummyUserProgress, dummyUserProfiles } from './dummyData';
 import { SymptomEntry, UserProgress } from '../types';
 import toast from 'react-hot-toast';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import { getDummyDataManager, DummyDataManager } from '../utils/dummyDataManager';
 import { dummyUserProfiles } from '../utils/dummyData';
 import { Database, Users, Trash2, Plus, RefreshCw, AlertTriangle } from 'lucide-react';
@@ -12,7 +12,7 @@ interface DummyDataPanelProps {
 const DummyDataPanel: React.FC<DummyDataPanelProps> = ({ user, onDataLoaded }) => {
   const [loading, setLoading] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
-  const [dummyManager] = useState(() => getDummyDataManager(user.uid));
+  const [dummyManager] = useState(() => getDummyDataManager(user.id));
 
   const handleLoadProfile = async (profileType: 'highRisk' | 'moderateRisk' | 'lowRisk') => {
     setLoading(true);
