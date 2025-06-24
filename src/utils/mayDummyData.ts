@@ -1,18 +1,4 @@
-import { SymptomEntry, UserProgress } from '../types';
-
-// Generate comprehensive dummy data for May 2024
-export const generateMayDummyData = (userId: string): { entries: SymptomEntry[], progress: UserProgress } => {
-  const entries: SymptomEntry[] = [];
-  const year = 2024;
-  const month = 4; // May (0-indexed)
-  const daysInMay = 31;
-  
-  // Simulate a realistic menstrual cycle starting around May 3rd
-  const cycleStartDay = 3;
-  const cycleLength = 28;
-  
-  for (let day = 1; day <= daysInMay; day++) {
-    const date = new Date(year, month, day);
+th, day);
     const dateString = date.toISOString().split('T')[0];
     
     // Calculate cycle day
