@@ -1,12 +1,12 @@
 // API Configuration for production
 export const API_CONFIG = {
-  // Replace with your actual Render URL after deployment
+  // Update these URLs after deployment
   ML_API_URL: process.env.NODE_ENV === 'production' 
-    ? 'https://endometriosis-ml-api.onrender.com'  // Your Render ML API URL
+    ? 'https://endometriosis-ml-api.onrender.com'  // Your ML API URL
     : 'http://localhost:8000',
     
   RAG_API_URL: process.env.NODE_ENV === 'production'
-    ? 'https://your-rag-api.onrender.com'  // Your Render RAG API URL  
+    ? 'https://endometriosis-rag-api.onrender.com'  // Your RAG API URL  
     : 'http://localhost:8001',
     
   SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
