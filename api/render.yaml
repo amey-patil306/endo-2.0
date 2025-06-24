@@ -2,10 +2,12 @@ services:
   - type: web
     name: endometriosis-ml-api
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn predict_api:app --host 0.0.0.0 --port $PORT"
+    buildCommand: "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
+    startCommand: "python predict_api.py"
     plan: free
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.18
+        value: 3.11.7
+      - key: PIP_DISABLE_PIP_VERSION_CHECK
+        value: "1"
