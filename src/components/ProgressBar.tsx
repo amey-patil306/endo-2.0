@@ -4,9 +4,10 @@ import { CheckCircle, Calendar } from 'lucide-react';
 
 interface ProgressBarProps {
   progress: UserProgress;
+  onNewMonth?: () => void;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ progress }) => {
+const ProgressBar: React.FC<ProgressBarProps> = ({ progress, onNewMonth }) => {
   const percentage = (progress.completedDays / progress.totalDays) * 100;
 
   return (
@@ -43,6 +44,15 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ progress }) => {
             : `${progress.totalDays - progress.completedDays} days remaining`
           }
         </p>
+        
+        {onNewMonth && progress.completedDays >= progress.totalDays && (
+          <button
+            onClick={onNewMonth}
+            className="mt-4 btn-primary"
+          >
+            Start New Month
+          </button>
+        )}
       </div>
     </div>
   );
