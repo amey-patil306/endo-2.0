@@ -1,2 +1,0 @@
-# This is a placeholder file - you need to copy your actual trained model here
-# For now, the API will use dummy predictions
