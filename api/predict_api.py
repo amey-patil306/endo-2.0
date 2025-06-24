@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uvicorn
+import os
 from predict_user_input import predict_from_input, aggregate_daily_logs
 
 app = FastAPI(
@@ -219,10 +220,12 @@ async def list_symptoms():
     }
 
 if __name__ == "__main__":
+    # Get port from environment variable or default to 8000
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "predict_api:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=False,  # Disable reload in production
         log_level="info"
     )
