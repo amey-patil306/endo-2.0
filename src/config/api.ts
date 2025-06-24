@@ -1,12 +1,12 @@
 // API Configuration for production
 export const API_CONFIG = {
-  // Update these URLs after deployment
+  // Replace these with your actual Railway URLs
   ML_API_URL: process.env.NODE_ENV === 'production' 
-    ? 'https://endometriosis-ml-api.onrender.com'  // Your ML API URL
+    ? 'https://endometriosis-ml-api-production.up.railway.app'  // Your Railway ML API URL
     : 'http://localhost:8000',
     
   RAG_API_URL: process.env.NODE_ENV === 'production'
-    ? 'https://endometriosis-rag-api.onrender.com'  // Your RAG API URL  
+    ? 'https://endometriosis-rag-api-production.up.railway.app'  // Your Railway RAG API URL  
     : 'http://localhost:8001',
     
   SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
