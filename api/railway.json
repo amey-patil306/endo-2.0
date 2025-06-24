@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "python predict_api.py",
+    "healthcheckPath": "/health"
+  }
+}

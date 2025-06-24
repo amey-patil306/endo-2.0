@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "rag_api.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/rag_api.py"
+    }
+  ]
+}
