@@ -1,262 +1,120 @@
 import os
 import logging
 from typing import Dict, List, Optional
-from together import Together
 
 logger = logging.getLogger(__name__)
 
 class TogetherLlamaClient:
-    def __init__(self, api_key: str = "a292a1df015e7c16357e8c36937fa671bd7148b0d66a14bb9e060e846dca9130"):
-        """Initialize Together API client with DeepSeek-V3 model."""
-        self.api_key = api_key
-        self.model = "deepseek-ai/DeepSeek-V3"
+    """Simplified Together API client with fallback responses."""
+    
+    def __init__(self, api_key: str = None):
+        """Initialize client (simplified for Railway deployment)."""
+        self.api_key = api_key or "demo-key"
+        self.model = "demo-model"
         
-        # Initialize Together client
-        self.client = Together(api_key=self.api_key)
-        
-        logger.info(f"🚀 Together API client initialized with DeepSeek-V3")
-        logger.info(f"🔑 API Key: {self.api_key[:10]}...")
+        logger.info("🚀 Simplified Together client initialized")
         
     def send_request(self, prompt: str, max_tokens: int = 300, temperature: float = 0.7) -> str:
-        """Send request to Together API and get response."""
-        
-        logger.info(f"📤 Sending request to DeepSeek-V3...")
-        logger.info(f"📝 Prompt: {prompt[:100]}...")
-        logger.info(f"🎯 Max tokens: {max_tokens}")
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=0.9,
-                stream=False
-            )
-            
-            # Extract the generated text
-            if response.choices and len(response.choices) > 0:
-                generated_text = response.choices[0].message.content
-                
-                if generated_text and generated_text.strip():
-                    logger.info(f"✅ Successfully generated response ({len(generated_text)} chars)")
-                    logger.info(f"📄 Response preview: {generated_text[:100]}...")
-                    return generated_text.strip()
-                else:
-                    logger.warning("⚠️ Empty response from API")
-                    return self._get_fallback_response(prompt)
-            else:
-                logger.warning("⚠️ No choices in API response")
-                return self._get_fallback_response(prompt)
-                
-        except Exception as e:
-            logger.error(f"❌ Together API error: {e}")
-            return self._get_fallback_response(prompt)
+        """Send request (returns fallback response for Railway deployment)."""
+        logger.info("📤 Using fallback response (Together API not available)")
+        return self._get_fallback_response(prompt)
     
     def generate_explanation(self, user_query: str, prediction_result: Dict, medical_context: List[str]) -> str:
-        """Generate explanation for endometriosis prediction using DeepSeek-V3."""
+        """Generate explanation (simplified version)."""
+        logger.info("🧠 Generating simplified explanation...")
         
         risk_level = prediction_result.get('risk_level', 'Unknown')
         probability = prediction_result.get('probabilities', {}).get('endometriosis', 0)
-        confidence = prediction_result.get('confidence', 0)
         
-        # Format medical context
-        context_text = ""
-        if medical_context:
-            context_text = "\n\nRelevant Medical Information:\n" + "\n".join([f"- {ctx[:200]}..." for ctx in medical_context[:2]])
-        
-        # Create comprehensive prompt for DeepSeek-V3
-        prompt = f"""You are a compassionate medical AI assistant helping explain endometriosis prediction results. Please provide a clear, empathetic explanation.
-
-User Question: {user_query}
-
-Prediction Results:
-- Risk Level: {risk_level}
-- Probability Score: {probability:.0%}
-- Confidence: {confidence:.0%}
-- Prediction: {prediction_result.get('prediction_label', 'Unknown')}
-
-{context_text}
-
-Please provide a clear, supportive explanation that:
-1. Explains what the {probability:.0%} risk score means in simple terms
-2. Provides context about what this risk level indicates
-3. Offers practical, actionable next steps
-4. Emphasizes the importance of professional medical consultation
-5. Is reassuring but informative, avoiding medical jargon
-
-Keep your response conversational, supportive, and around 200-300 words. Focus on helping the user understand their results and what to do next."""
-
-        logger.info("🧠 Generating medical explanation with DeepSeek-V3...")
-        return self.send_request(prompt, max_tokens=400, temperature=0.7)
+        return self._get_explanation_response(user_query, risk_level, probability)
     
     def answer_question(self, question: str, prediction_result: Dict) -> str:
-        """Answer a specific question about endometriosis using DeepSeek-V3."""
+        """Answer question (simplified version)."""
+        logger.info(f"❓ Answering question: {question}")
         
         risk_level = prediction_result.get('risk_level', 'Unknown')
-        probability = prediction_result.get('probabilities', {}).get('endometriosis', 0)
-        
-        prompt = f"""You are a knowledgeable medical assistant. Please answer this question about endometriosis clearly and accurately.
-
-Question: {question}
-
-Context: The user has received a {risk_level.lower()} risk assessment with a {probability:.0%} probability score for endometriosis.
-
-Please provide a helpful, accurate answer that:
-1. Directly addresses their question
-2. Provides relevant medical information
-3. Considers their specific risk level
-4. Always recommends consulting healthcare professionals for medical decisions
-5. Is clear and easy to understand
-
-Keep your response concise but informative (2-3 sentences), and always emphasize the importance of professional medical care."""
-
-        logger.info(f"❓ Answering question with DeepSeek-V3: {question}")
-        return self.send_request(prompt, max_tokens=200, temperature=0.6)
+        return self._get_question_response(question, risk_level)
     
     def _get_fallback_response(self, prompt: str) -> str:
-        """Generate fallback response when API fails."""
+        """Generate fallback response based on prompt content."""
         prompt_lower = prompt.lower()
         
-        if "what does" in prompt_lower and ("%" in prompt or "probability" in prompt_lower or "risk score" in prompt_lower):
-            return """Your risk score represents how closely your symptom pattern matches those typically seen in endometriosis cases. A higher percentage means your symptoms align more closely with diagnosed cases.
+        if "explanation" in prompt_lower and "risk" in prompt_lower:
+            return "Based on your symptom analysis, this assessment helps identify when to seek medical care. The risk score indicates how closely your symptoms match patterns seen in endometriosis cases. Please consult with a healthcare professional for proper evaluation and diagnosis."
+        
+        return "Thank you for your question. For the most accurate and personalized medical advice, please consult with a healthcare professional who can evaluate your specific situation."
+    
+    def _get_explanation_response(self, user_query: str, risk_level: str, probability: float) -> str:
+        """Generate explanation response based on risk level."""
+        probability_percent = int(probability * 100)
+        
+        if risk_level.lower() == 'high':
+            return f"""Your analysis shows a {probability_percent}% risk score, indicating a higher likelihood that your symptoms may be related to endometriosis. This means your symptom combination creates a pattern often seen in diagnosed cases.
 
-**What this means:** This is a screening tool that helps identify when to seek medical care, not a diagnosis. The score is based on patterns in your symptom data compared to known cases.
+**What this means:**
+Your symptoms align closely with patterns commonly seen in endometriosis cases. While this doesn't provide a definitive diagnosis, it suggests you should seek medical evaluation promptly.
 
 **Important next steps:**
-- Schedule an appointment with a gynecologist to discuss your symptoms
+- Schedule an appointment with a gynecologist as soon as possible
 - Bring your symptom tracking data to the appointment
 - Don't let anyone dismiss your concerns - you know your body best
+- Consider bringing a support person to your appointment
 
-Remember: Only a healthcare professional can provide a proper diagnosis through examination and potentially imaging or surgical procedures. This tool helps guide your healthcare decisions."""
+**Remember:** This is a screening tool to help guide your healthcare decisions, not a definitive diagnosis. Only a healthcare provider can properly diagnose endometriosis through examination and potentially imaging or surgical procedures."""
         
-        elif "next steps" in prompt_lower or "what should i do" in prompt_lower:
-            return """Based on your results, here are the recommended next steps:
+        elif risk_level.lower() == 'moderate':
+            return f"""Your analysis shows a {probability_percent}% risk score, indicating moderate concern. Some of your symptoms align with patterns seen in endometriosis, but the picture isn't entirely clear.
 
-**Immediate actions:**
-1. Schedule an appointment with a gynecologist as soon as possible
-2. Gather your symptom tracking data and any relevant medical history
-3. Prepare a list of questions about your symptoms and concerns
-4. Consider bringing a support person to your appointment
+**What this means:**
+Your symptom pattern has some features that could be associated with endometriosis, but other factors might also explain what you're experiencing.
 
-**Important reminders:**
-- Don't let anyone dismiss your symptoms - advocate for yourself
-- Early diagnosis and treatment often lead to better outcomes
-- Many effective treatments are available for endometriosis
-- You're taking an important step by tracking your symptoms
+**Recommended next steps:**
+- Schedule a consultation with a gynecologist to discuss your symptoms
+- Continue tracking your symptoms to identify patterns
+- Discuss your family history and other risk factors with your doctor
+- Don't delay seeking care if symptoms are affecting your quality of life
 
-Your health matters, and seeking medical evaluation is the right choice."""
+**Keep in mind:** Many conditions can cause similar symptoms to endometriosis. A healthcare provider can help determine the most likely causes and appropriate tests or treatments."""
         
-        elif "accurate" in prompt_lower or "accuracy" in prompt_lower:
-            return """This analysis is based on machine learning patterns from symptom data, but it has important limitations:
+        else:  # Low risk
+            return f"""Your analysis shows a {probability_percent}% risk score, which is considered lower risk. Your current symptoms don't strongly match typical endometriosis patterns, but every person's experience is unique.
 
-**What it can do:**
-- Identify symptom patterns associated with endometriosis
-- Help you understand when to seek medical care
-- Provide guidance on symptom tracking
+**What this means:**
+Based on your symptom pattern, endometriosis is less likely, but this doesn't completely rule out the condition or other health concerns.
 
-**What it cannot do:**
-- Provide a definitive diagnosis (only doctors can do this)
-- Account for all individual factors and medical history
-- Replace comprehensive medical evaluation
+**Still important to consider:**
+- Continue monitoring your symptoms over time
+- Maintain regular gynecological check-ups
+- Consult a healthcare provider if symptoms worsen or new symptoms develop
+- Consider other potential causes for your symptoms
 
-**Bottom line:** The tool is designed to help you make informed decisions about seeking medical care, but should never replace professional medical evaluation. Its accuracy depends on honest symptom reporting and is most useful as a screening tool."""
+**Remember:** Even with a lower risk score, if your symptoms are concerning you or affecting your quality of life, it's always appropriate to seek medical advice."""
+    
+    def _get_question_response(self, question: str, risk_level: str) -> str:
+        """Generate response to specific questions."""
+        question_lower = question.lower()
         
-        elif "concerning" in prompt_lower or "symptoms" in prompt_lower:
-            return """The most concerning symptoms that warrant prompt medical attention include:
-
-**High priority symptoms:**
-- Severe pelvic pain that interferes with daily activities
-- Heavy bleeding that soaks through protection every hour
-- Pain during intercourse that's worsening
-- Persistent digestive issues during menstruation
-
-**Other important symptoms:**
-- Chronic fatigue that's affecting your quality of life
-- Symptoms that are progressively getting worse
-- Pain that doesn't respond to over-the-counter medications
-
-**When to seek immediate care:**
-Any combination of these symptoms, especially if they're affecting your work, relationships, or daily activities, should be evaluated by a healthcare provider promptly. Trust your instincts about your body."""
+        if 'next steps' in question_lower or 'what should i do' in question_lower:
+            if risk_level.lower() == 'high':
+                return "With your high risk score, I recommend scheduling an appointment with a gynecologist as soon as possible. Bring your symptom tracking data and prepare a list of questions. Don't let anyone dismiss your concerns - you know your body best."
+            elif risk_level.lower() == 'moderate':
+                return "Your moderate risk score suggests you should schedule a consultation with a gynecologist to discuss your symptoms. Continue tracking your symptoms and consider discussing your family history with your doctor."
+            else:
+                return "Continue monitoring your symptoms and maintain regular gynecological check-ups. If symptoms worsen or new symptoms develop, don't hesitate to consult a healthcare provider."
         
-        elif "treatment" in prompt_lower or "options" in prompt_lower:
-            return """Treatment options for endometriosis vary based on severity, symptoms, and your personal goals:
-
-**Pain Management:**
-- Over-the-counter pain relievers (NSAIDs)
-- Prescription pain medications
-- Heat therapy, relaxation techniques, gentle exercise
-
-**Hormonal Therapy:**
-- Birth control pills, patches, or rings
-- Progestin therapy
-- GnRH agonists and antagonists
-
-**Surgical Options:**
-- Laparoscopic surgery to remove endometrial tissue
-- In severe cases, more extensive procedures
-
-**Lifestyle Support:**
-- Stress management and counseling
-- Dietary modifications
-- Support groups
-
-The best treatment plan is highly individual and should be developed with a healthcare provider who understands your specific situation, symptoms, and goals."""
+        if 'accurate' in question_lower or 'accuracy' in question_lower:
+            return "This analysis is based on symptom patterns and machine learning, but only a healthcare professional can provide a definitive diagnosis. The tool helps you understand when to seek medical care and what information to share with your doctor."
         
-        else:
-            return """Thank you for your question about endometriosis and your health. Based on your symptom analysis, I recommend discussing your specific concerns with a healthcare provider who can give you personalized medical advice.
-
-If you're experiencing concerning symptoms, don't hesitate to seek medical attention. Your health and well-being are important, and healthcare providers are there to help you understand and manage your symptoms.
-
-Remember: This analysis is a tool to help guide your healthcare decisions, but professional medical evaluation is essential for proper diagnosis and treatment."""
-
-# Test the Together client
-if __name__ == "__main__":
-    print("🧪 Testing Together API with DeepSeek-V3")
-    print("=" * 50)
-    
-    client = TogetherLlamaClient()
-    
-    # Test 1: Simple question
-    print("\n🤖 Test 1: Simple Medical Question")
-    print("-" * 40)
-    
-    simple_question = "What is endometriosis and what are its main symptoms?"
-    print(f"📝 Question: {simple_question}")
-    
-    response = client.send_request(simple_question, max_tokens=200)
-    print(f"📤 Response: {response}")
-    
-    # Test 2: Medical explanation
-    print("\n🏥 Test 2: Medical Explanation Generation")
-    print("-" * 45)
-    
-    sample_prediction = {
-        "prediction_label": "Endometriosis",
-        "confidence": 0.78,
-        "risk_level": "High",
-        "probabilities": {"endometriosis": 0.78, "no_endometriosis": 0.22}
-    }
-    
-    user_query = "What does my 78% risk score mean? Should I be worried?"
-    print(f"📝 User query: {user_query}")
-    
-    explanation = client.generate_explanation(user_query, sample_prediction, [])
-    print(f"📤 Explanation: {explanation}")
-    
-    # Test 3: Question answering
-    print("\n❓ Test 3: Question Answering")
-    print("-" * 35)
-    
-    question = "What are the next steps I should take?"
-    print(f"📝 Question: {question}")
-    
-    answer = client.answer_question(question, sample_prediction)
-    print(f"📤 Answer: {answer}")
-    
-    print("\n🎉 Together API test complete!")
+        if 'concerning' in question_lower or 'symptoms' in question_lower:
+            return "The most concerning symptoms include severe pelvic pain that interferes with daily activities, heavy bleeding, pain during intercourse, and persistent digestive issues. Any combination of worsening symptoms should be evaluated by a healthcare provider."
+        
+        if 'doctor' in question_lower or 'see' in question_lower:
+            if risk_level.lower() == 'high':
+                return "You should see a doctor as soon as possible, ideally within the next few weeks. Look for a gynecologist experienced with endometriosis and pelvic pain."
+            else:
+                return "Consider scheduling an appointment with a gynecologist within the next few months, or sooner if symptoms worsen or are affecting your quality of life."
+        
+        if 'treatment' in question_lower or 'options' in question_lower:
+            return "Treatment options vary depending on severity and include pain management, hormonal therapies like birth control pills, and surgical options. The best plan depends on your specific situation and should be discussed with a healthcare provider."
+        
+        return "That's a great question about your health. I recommend discussing this specific concern with a healthcare provider who can give you personalized medical advice based on your complete health history and symptoms."
