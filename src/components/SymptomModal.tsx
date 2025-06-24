@@ -169,7 +169,7 @@ const SymptomModal: React.FC<SymptomModalProps> = ({ date, existingEntry, onSave
                 <div className="mt-2 text-sm text-red-700">
                   <p>Unable to save data. This might be caused by:</p>
                   <ul className="list-disc list-inside mt-1">
-                    <li>Ad blocker blocking Firebase requests</li>
+                    <li>Ad blocker blocking Supabase requests</li>
                     <li>Network connectivity issues</li>
                     <li>Browser privacy settings</li>
                   </ul>

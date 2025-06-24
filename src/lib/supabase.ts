@@ -117,14 +117,5 @@ export interface UserProgressDB {
   updated_at?: string;
 }
 
-// Auth helper functions
-export const getCurrentUser = (): User | null => {
-  return supabase.auth.getUser().then(({ data }) => data.user).catch(() => null);
-};
-
-export const getCurrentSession = (): Promise<Session | null> => {
-  return supabase.auth.getSession().then(({ data }) => data.session).catch(() => null);
-};
-
 // Export types for convenience
 export type { User, Session };
